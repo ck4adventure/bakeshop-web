@@ -16,5 +16,9 @@ export default defineConfig({
 	},
 	test: {
     // ...
+		coverage: {
+			// don't include coverage for shadcn/ui component library
+      exclude: ['src/components/ui/**'], 
+    },
   },
 })
