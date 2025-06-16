@@ -1,3 +1,5 @@
+/// <reference types="vitest/config" />
+
 import path from "path"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -10,6 +12,13 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
-		},
-	}
+		}
+	},
+	test: {
+    // ...
+		coverage: {
+			// don't include coverage for shadcn/ui component library
+      exclude: ['src/components/ui/**'], 
+    },
+  },
 })
