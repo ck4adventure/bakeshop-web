@@ -1,5 +1,5 @@
 # Stack Setup
-React/Vite frontend.
+React/Vite frontend. using `ts`.
 Shadcn/ui for components.
 Tailwindcss for styling.
 Vitest for testing and coverage reporting.
