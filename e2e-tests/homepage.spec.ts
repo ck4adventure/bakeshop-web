@@ -11,6 +11,10 @@ test.describe('homepage', () => {
 		// Expect a title "to contain" a substring.
 		expect(page).toBeDefined();
 	});
+	test('homepage has a headerbar', async ({ page }) => {
+		const header = page.getByTestId('headerbar');
+		await expect(header).toBeVisible();
+	})
 })
 
 
