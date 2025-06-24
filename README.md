@@ -11,5 +11,12 @@ Playwright for e2e testing across all browsers.
 3. `npm install`
 4. `npm run dev`
 
+## To add shadcn/ui components
+`npx shadcn@latest add [item]`
+
+## To run Vitest
+`npm run test`
+
 ## To run Playwright
-`npx playwright test`
+`npx playwright test`, or. 
+`npm run playwright`

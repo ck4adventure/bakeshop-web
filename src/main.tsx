@@ -3,13 +3,29 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router';
 import './index.css'
 import App from './App.tsx'
+import LoginPage from './app/login/page.tsx';
+import DashboardPage from './app/business/dashboard/page.tsx';
+import { ProtectedRoute } from '@/components/ProtectedRoute/ProtectedRoute.tsx';
+import { AuthProvider } from '@/context/auth';
+import BusinessLayout from './app/business/layout.tsx';
 
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
 		<BrowserRouter>
-			<Routes>
-				<Route path="/" element={<App />} />
-			</Routes>
+			<AuthProvider>
+				<Routes>
+					<Route path="/" element={<App />} />
+					<Route path="/login" element={<LoginPage />} />
+					{/* TODO path should be :business-slug */}
+					<Route element={<BusinessLayout />} path='/business'>
+						<Route path="dashboard" element={
+							<ProtectedRoute>
+								<DashboardPage />
+							</ProtectedRoute>
+						} />
+					</Route>
+				</Routes>
+			</AuthProvider>
 		</BrowserRouter>
 	</StrictMode>,
 )
@@ -51,7 +67,7 @@ createRoot(document.getElementById('root')!).render(
 </Routes> */}
 
 // dynamic segments, provided as `params` 
-{/* <Route path="teams/:teamId" element={<Team />} /> */}
+{/* <Route path="teams/:teamId" element={<Team />} /> */ }
 
 // import { useParams } from "react-router";
 
