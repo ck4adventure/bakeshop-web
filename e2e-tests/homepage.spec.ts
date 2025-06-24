@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 const homepageURL = '/'
 
+// TODO
+// not logged in should land here
+// logged in should redirect to /:business/dashboard
 test.describe('homepage', () => {
 	test.beforeEach(async ({ page }) => {
 		// Go to the starting url before each test.

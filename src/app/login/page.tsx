@@ -16,7 +16,8 @@ export default function LoginPage() {
 
 	useEffect(() => {
 		if (user) {
-			navigate("/dashboard");
+			// TODO get business slug from user data
+			navigate("/business/dashboard");
 		}
 	}, [user, navigate]);
 
