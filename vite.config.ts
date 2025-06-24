@@ -16,9 +16,10 @@ export default defineConfig({
 	},
 	test: {
     // ...
+		exclude: ['e2e-tests/**', 'tests-examples/**', 'node_modules'],
 		coverage: {
 			// don't include coverage for shadcn/ui component library
-      exclude: ['src/components/ui/**'], 
+      exclude: ['src/components/ui/**', 'e2e-tests/**', 'tests-examples/**'], 
     },
   },
 })

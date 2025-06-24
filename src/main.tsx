@@ -1,10 +1,62 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter, Routes, Route } from 'react-router';
 import './index.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+	<StrictMode>
+		<BrowserRouter>
+			<Routes>
+				<Route path="/" element={<App />} />
+			</Routes>
+		</BrowserRouter>
+	</StrictMode>,
 )
+
+// index in a route indicates it renders into its parent as default child route
+// index routes can't have children, use a layout route instead
+
+// basic example
+{/* <Routes>
+  <Route index element={<Home />} />
+  <Route path="about" element={<About />} />
+
+  <Route element={<AuthLayout />}>
+    <Route path="login" element={<Login />} />
+    <Route path="register" element={<Register />} />
+  </Route>
+
+  <Route path="concerts">
+    <Route index element={<ConcertsHome />} />
+    <Route path=":city" element={<City />} />
+    <Route path="trending" element={<Trending />} />
+  </Route>
+</Routes> */}
+
+// using layouts
+{/* <Routes>
+  <Route element={<MarketingLayout />}>
+    <Route index element={<MarketingHome />} />
+    <Route path="contact" element={<Contact />} />
+  </Route>
+
+  <Route path="projects">
+    <Route index element={<ProjectsHome />} />
+    <Route element={<ProjectsLayout />}>
+      <Route path=":pid" element={<Project />} />
+      <Route path=":pid/edit" element={<EditProject />} />
+    </Route>
+  </Route>
+</Routes> */}
+
+// dynamic segments, provided as `params` 
+{/* <Route path="teams/:teamId" element={<Team />} /> */}
+
+// import { useParams } from "react-router";
+
+// export default function CategoryProduct() {
+//   let { categoryId, productId } = useParams();
+//   // ...
+// }
+
