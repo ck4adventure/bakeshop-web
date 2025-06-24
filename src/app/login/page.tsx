@@ -11,9 +11,8 @@ export default function LoginPage() {
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const { login, loading, user } = useAuth();
-
-	if (loading) return <div>Loading...</div>;
 	const navigate = useNavigate();
+
 
 	useEffect(() => {
 		if (user) {
@@ -21,6 +20,8 @@ export default function LoginPage() {
 		}
 	}, [user, navigate]);
 
+	if (loading) return <div>Loading...</div>;
+	
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError(null);
