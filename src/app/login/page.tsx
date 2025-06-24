@@ -1,37 +1,34 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import React, { useState } from "react";
-import { useNavigate } from "react-router"
+import React, { useState, useEffect } from "react";
+
+import { useNavigate } from "react-router";
+import { useAuth } from "@/context/auth";
 
 export default function LoginPage() {
-	// const [email, setEmail] = useState("");
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const { login, loading, user } = useAuth();
+
+	if (loading) return <div>Loading...</div>;
 	const navigate = useNavigate();
+
+	useEffect(() => {
+		if (user) {
+			navigate("/dashboard");
+		}
+	}, [user, navigate]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError(null);
-		// Handle login logic here
-		try {
-			const res = await fetch("http://localhost:3000/auth/login", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ username, password }),
-			});
-
-			if (!res.ok) {
-				const data = await res.json();
-				setError(data.message || "Login failed");
-				return;
-			}
-			navigate("/");
-
-		} catch (err) {
-			console.log(err);
-			setError("check console for err")
+		const success = await login(username, password);
+		if (success) {
+			navigate("/dashboard");
+		} else {
+			setError("Invalid email or password");
 		}
 	};
 

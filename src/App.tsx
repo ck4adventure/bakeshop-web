@@ -1,6 +1,5 @@
 
 import './App.css'
-// import { Card } from './components/ui/card'
 // import HeaderBar from './components/HeaderBar/HeaderBar'
 
 function App() {
@@ -100,12 +99,3 @@ function App() {
 export default App
 
 
-// <Card className='w-[500px] h-[200px] m-4 p-4'>
-// 	<h1 className='font-bold text-blue-800'>Inventory</h1>
-// </Card>
-// <Card className='w-[500px] h-[200px] m-4 p-4'>
-// 	<h1 className='font-bold text-blue-800'>Inventory</h1>
-// </Card>
-// <Card className='w-[500px] h-[200px] m-4 p-4'>
-// 	<h1 className='font-bold text-blue-800'>Inventory</h1>
-// </Card>
