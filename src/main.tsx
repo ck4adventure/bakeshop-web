@@ -17,12 +17,12 @@ createRoot(document.getElementById('root')!).render(
 					<Route path="/" element={<App />} />
 					<Route path="/login" element={<LoginPage />} />
 					{/* TODO path should be :business-slug */}
-					<Route element={<BusinessLayout />} path='/business'>
-						<Route path="dashboard" element={
-							<ProtectedRoute>
-								<DashboardPage />
-							</ProtectedRoute>
-						} />
+					<Route element={
+						<ProtectedRoute>
+							<BusinessLayout />
+						</ProtectedRoute>
+					} path='/business'>
+						<Route path="dashboard" element={<DashboardPage />} />
 					</Route>
 				</Routes>
 			</AuthProvider>
