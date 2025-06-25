@@ -13,9 +13,10 @@ const HeaderBar = () => {
 	};
 	return (
 		<header data-testid="headerbar" className="w-full h-[64px] bg-purple-200 flex justify-between items-center p-4 border-b-2 border-slate-300">
-			<div className="flex-1">
-				LOGO
-			</div>
+				<div className="flex items-center gap-2 flex-1">
+					<img src="/coookies.png" alt="Logo" className="h-8 w-8" />
+					<span className="text-xl font-bold text-blue-900">Bakedown</span>
+				</div>
 			<div className="text-slate-500 flex-1 text-center">
 				BAKEDOWN
 			</div>

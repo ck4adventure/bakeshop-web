@@ -10,7 +10,7 @@ function App() {
 			{/* Header Bar */}
 			<header className="w-full bg-white shadow flex items-center justify-between px-8 py-4">
 				<div className="flex items-center gap-2">
-					<img src="/1.png" alt="Logo" className="h-8 w-8" />
+					<img src="/coookies.png" alt="Logo" className="h-8 w-8" />
 					<span className="text-xl font-bold text-blue-900">Bakedown</span>
 				</div>
 				<nav className="flex items-center gap-6">
