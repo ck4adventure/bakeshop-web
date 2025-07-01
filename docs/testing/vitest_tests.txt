@@ -1,0 +1,2 @@
+src/components/HeaderBar/Headerbar.test.tsx > headerbar >  should display the logo
+src/lib/sum.test.ts > adds 1 + 2 to equal 3
