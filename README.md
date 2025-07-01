@@ -14,8 +14,18 @@ Playwright for e2e testing across all browsers.
 ## To add shadcn/ui components
 `npx shadcn@latest add [item]`
 
-## To run Vitest
+## Vitest
+### To run component tests
 `npm run test`
+
+### Test List
+See [the tests file](./docs/testing/vitest_tests.txt) for a complete list of current tests.
+
+### Adding tests
+- test file goes next to component [Name].test.tsx
+- describe, before and after blocks, and use `it` for the test
+- use `spy` to check if a function has been called
+- use `mock` to actually alter the implementation
 
 ## To run Playwright
 `npx playwright test`, or. 

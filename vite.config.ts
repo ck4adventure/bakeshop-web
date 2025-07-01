@@ -16,6 +16,8 @@ export default defineConfig({
 	},
 	test: {
     // ...
+		globals: true,
+		environment: 'jsdom',
 		exclude: ['e2e-tests/**', 'tests-examples/**', 'node_modules'],
 		coverage: {
 			// don't include coverage for shadcn/ui component library
