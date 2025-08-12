@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router';
 import './index.css'
 import App from './App.tsx'
 import LoginPage from './app/login/page.tsx';
-import DashboardPage from './app/business/dashboard/page.tsx';
+import DashboardPage from './app/business/dashboard/DashboardPage.tsx';
 import { ProtectedRoute } from '@/components/ProtectedRoute/ProtectedRoute.tsx';
 import { AuthProvider } from '@/context/auth';
 import BusinessLayout from './app/business/layout.tsx';
@@ -24,7 +24,7 @@ createRoot(document.getElementById('root')!).render(
 						</ProtectedRoute>
 					} path='/business'>
 						<Route path="dashboard" element={<DashboardPage />} />
-						<Route path="items" element={<InventoryPage />} />
+						<Route path="inventory" element={<InventoryPage />} />
 					</Route>
 				</Routes>
 			</AuthProvider>

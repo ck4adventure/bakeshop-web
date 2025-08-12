@@ -1,3 +1,4 @@
+import { ItemBox } from "@/components/Inventory/InventoryComponent";
 import { useEffect, useState } from "react";
 
 export default function InventoryPage() {
@@ -28,11 +29,11 @@ export default function InventoryPage() {
   if (error) return <div>Error: {error}</div>;
 
   return (
-    <div>
-      <div>Items Page</div>
+    <div className="flex flex-col justify-center items-center">
+      <div className="m-4">Current Inventory Levels</div>
       <ul>
         {data.map(item => (
-          <li key={item.id}>{item.name}</li>
+					<ItemBox name={item.name} qty={199} key={item.name} />
         ))}
       </ul>
     </div>
