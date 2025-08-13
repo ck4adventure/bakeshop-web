@@ -1,5 +1,6 @@
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { useNavigate } from "react-router";
 
 // const hardcodedItems = [
 // 	{ "name": "Chocolate Chip Cookiess", "qty": 23 },
@@ -23,17 +24,17 @@ type InventoryComponentProps = {
 export const ItemBox = ({ name, qty }: Item) => {
 	
 	return (
-		<Alert className="w-[600px] flex justify-between m-4">
+		<Alert className="w-[400px] flex justify-between m-4">
 			<AlertTitle>{name}</AlertTitle>
-			<div>{qty}</div>
+			<div>199</div>
 		</Alert>
 	);
 };
 
 export const InventoryComponent: React.FC<InventoryComponentProps>  = ({ items }) => {
-
+	const navigate = useNavigate();
 	return (
-		<Card className="mb-4">
+		<Card className="m-8" onClick={() => navigate("/business/inventory")}>
 			<CardHeader className="font-semibold text-lg">Inventory</CardHeader>
 			<CardContent className="flex flex-wrap items-start gap-3">
 				{items && items.map((item: Item) => {
