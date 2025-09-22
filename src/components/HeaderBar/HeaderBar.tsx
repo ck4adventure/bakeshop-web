@@ -1,3 +1,5 @@
+// Headerbar for all '/:business/' pages
+
 import { useAuth } from "@/context/auth";
 import { useNavigate } from "react-router";
 

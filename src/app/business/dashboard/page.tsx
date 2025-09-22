@@ -1,3 +1,5 @@
+// Dashboard Page is the main landing for each business
+// it will evtl have things like the "daily order", "inventory", and "batches"
 import { Card } from '../../../components/ui/card';
 // import { useAuth } from "../../../context/auth"; 
 

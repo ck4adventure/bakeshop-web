@@ -1,4 +1,5 @@
-// src/components/ProtectedRoute.tsx
+// ProtectedRoute provides a control for checking users access via token
+
 import React from 'react';
 import { Navigate } from 'react-router';
 import { useAuth } from '@/context/auth';

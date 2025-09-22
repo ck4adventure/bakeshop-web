@@ -1,3 +1,7 @@
+// Business layout for all pages a business would be accessing
+// does not include login/logout
+// same headerbar persists across all pages, content below
+
 import HeaderBar from "@/components/HeaderBar/HeaderBar";
 import { Outlet } from "react-router";
 

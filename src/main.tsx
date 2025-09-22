@@ -1,3 +1,7 @@
+// Main App Rendering
+// routes are listed here using both
+// AuthProvider to check login and get profile
+// ProtectedRout to enforce access to authorized users
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router';

@@ -1,3 +1,6 @@
+// Marketing is the main landing page for the domain
+// logged in users will be redirected to '/:business/dashboard'
+
 export default function Page() {
 	return (
 					<main className="w-full max-w-4xl mt-8 flex flex-col gap-12">

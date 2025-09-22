@@ -1,4 +1,9 @@
 
+// Landing page for the domain ie www.bakedown.com
+// Custom Header with links and login
+// AppPage is marketing content (hero image, features, contact info, etc)
+// Footer with standard biz links 
+
 import './App.css'
 import AppPage  from './app/marketing/page.tsx'
 // import HeaderBar from './components/HeaderBar/HeaderBar'

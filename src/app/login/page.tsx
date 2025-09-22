@@ -1,3 +1,6 @@
+// LoginPage for business users
+// currently will redirect to /:business/dashboard on OK login
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
