@@ -12,6 +12,7 @@ import DashboardPage from './app/business/dashboard/page.tsx';
 import { ProtectedRoute } from '@/components/ProtectedRoute/ProtectedRoute.tsx';
 import { AuthProvider } from '@/context/auth';
 import BusinessLayout from './app/business/layout.tsx';
+import ItemsPage from './app/business/items/page.tsx';
 
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')!).render(
 						</ProtectedRoute>
 					} path='/business'>
 						<Route path="dashboard" element={<DashboardPage />} />
+						<Route path="items" element={<ItemsPage />} />
 					</Route>
 				</Routes>
 			</AuthProvider>
