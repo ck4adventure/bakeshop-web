@@ -31,7 +31,7 @@ export default function LoginPage() {
 		setError(null);
 		const success = await login(username, password);
 		if (success) {
-			navigate("/dashboard");
+			navigate("/business/dashboard");
 		} else {
 			setError("Invalid email or password");
 		}

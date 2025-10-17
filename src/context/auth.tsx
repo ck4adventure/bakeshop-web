@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 				const res = await fetch('http://localhost:3000/auth/profile', { credentials: 'include' });
 				if (res.ok) {
 					const data = await res.json();
-					console.log("data was: ", data);
+					// console.log("data was: ", data);
 					setUser(data);
 				} else {
 					console.log("profile was not fetched")

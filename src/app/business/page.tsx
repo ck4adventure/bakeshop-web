@@ -1,4 +1,4 @@
-// Dashboard Page is the main landing for each business
+// Biz Page is the main landing for each business
 // it will evtl have things like the "daily order", "inventory", and "batches"
 
 
@@ -6,7 +6,7 @@ import { useAuth } from "@/context/auth";
 import { Link } from "react-router"
 
 
-export default function DashboardPage() {
+export default function BizPage() {
 	  const { user, loading } = useAuth();
 		  if (loading) return <div>Loading...</div>;
   if (!user) return <div>Not authenticated</div>;
