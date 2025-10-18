@@ -14,6 +14,7 @@ import { AuthProvider } from '@/context/auth';
 import BusinessLayout from './app/business/layout.tsx';
 import ItemsPage from './app/business/items/page.tsx';
 import InventoryPage from './app/business/inventory/page.tsx';
+import ItemPage from './app/business/inventory/slug/page.tsx';
 
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
@@ -28,10 +29,13 @@ createRoot(document.getElementById('root')!).render(
 							<BusinessLayout />
 						</ProtectedRoute>
 					} path='/business'>
-						<Route index element={<Navigate to="dashboard" />} />
+
+						{/* <Route index element={<Navigate to="dashboard" />} /> */}
 						<Route path="dashboard" element={<DashboardPage />} />
 						<Route path="items" element={<ItemsPage />} />
+						
 						<Route path="inventory" element={<InventoryPage />} />
+						<Route path="inventory/:slug" element={<ItemPage />} />
 					</Route>
 				</Routes>
 			</AuthProvider>
