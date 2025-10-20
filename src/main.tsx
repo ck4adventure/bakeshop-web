@@ -4,7 +4,7 @@
 // ProtectedRout to enforce access to authorized users
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { BrowserRouter, Routes, Route } from 'react-router';
 import './index.css'
 import App from './App.tsx'
 import LoginPage from './app/login/page.tsx';
@@ -14,7 +14,7 @@ import { AuthProvider } from '@/context/auth';
 import BusinessLayout from './app/business/layout.tsx';
 import ItemsPage from './app/business/items/page.tsx';
 import InventoryPage from './app/business/inventory/page.tsx';
-import ItemPage from './app/business/inventory/slug/page.tsx';
+import ItemPage from './app/business/items/slug/page.tsx';
 
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
@@ -32,10 +32,15 @@ createRoot(document.getElementById('root')!).render(
 
 						{/* <Route index element={<Navigate to="dashboard" />} /> */}
 						<Route path="dashboard" element={<DashboardPage />} />
+						<Route path="items/:slug" element={<ItemPage />} />
 						<Route path="items" element={<ItemsPage />} />
-						
 						<Route path="inventory" element={<InventoryPage />} />
-						<Route path="inventory/:slug" element={<ItemPage />} />
+						{/* <Route path="bakeoff" element={<BakeoffPage />} /> */}
+						{/* <Route path="bakeoff/:date" element={<DailyBakeOffPage />} /> */}
+						{/* <Route path="batches" element={<BatchesPage />} /> */}
+						{/* <Route path="batches/:id" element={<BatchViewPage />} /> */}
+						{/* <Route path="orders" element={<OrdersPage />} /> */}
+						{/* <Route path="orders/:date" element={<DailyOrdersPage />} /> */}
 					</Route>
 				</Routes>
 			</AuthProvider>

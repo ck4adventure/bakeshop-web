@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router";
 
 // Define the shape of an item returned by your API
-interface Inventory {
+interface InventoryItem {
 	"itemId": number,
 	"quantity": number,
 	"updatedAt": string,
@@ -14,7 +15,7 @@ interface Inventory {
 // type ApiResponse = Item[];
 
 const InventoryList: React.FC = () => {
-	const [items, setItems] = useState<Inventory[]>([]);
+	const [items, setItems] = useState<InventoryItem[]>([]);
 	const [loading, setLoading] = useState<boolean>(true);
 	const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +27,7 @@ const InventoryList: React.FC = () => {
 					throw new Error(`HTTP error! status: ${response.status}`);
 				}
 
-				const data: Inventory[] = await response.json();
+				const data: InventoryItem[] = await response.json();
 				setItems(data);
 			} catch (err) {
 				if (err instanceof Error) {
@@ -52,7 +53,8 @@ const InventoryList: React.FC = () => {
 			) : (
 				<ul className="flex flex-col items-center">
 					{items.map((item) => (
-						<div key={item.itemId} className="w-[400px] m-4 flex flex-col border rounded-md">
+						<Link key={item.itemId} to={`/business/items/${item.item.slug}`} >
+						<div  className="w-[400px] m-4 flex flex-col border rounded-md">
 							<div className="flex justify-between p-4">
 								<div>{item.item.name}</div>
 								<div>{item.quantity}</div>
@@ -60,6 +62,7 @@ const InventoryList: React.FC = () => {
 							{/* Bottom color band */}
 							<div className={`h-2 rounded-b-md ${item.quantity > 30 ? 'bg-green-500' : item.quantity > 10 ? 'bg-orange-400' : 'bg-red-500'}`} />
 						</div>
+						</Link>
 					))}
 				</ul>
 			)}
