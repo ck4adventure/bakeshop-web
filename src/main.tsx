@@ -8,25 +8,39 @@ import { BrowserRouter, Routes, Route } from 'react-router';
 import './index.css'
 import App from './App.tsx'
 import LoginPage from './app/login/page.tsx';
-import DashboardPage from './app/business/dashboard/page.tsx';
+import DashboardPage from './app/business/page.tsx';
 import { ProtectedRoute } from '@/components/ProtectedRoute/ProtectedRoute.tsx';
 import { AuthProvider } from '@/context/auth';
 import BusinessLayout from './app/business/layout.tsx';
+import ItemsPage from './app/business/items/page.tsx';
+import InventoryPage from './app/business/inventory/page.tsx';
+import ItemPage from './app/business/items/slug/page.tsx';
 
 createRoot(document.getElementById('root')!).render(
 	<StrictMode>
 		<BrowserRouter>
 			<AuthProvider>
 				<Routes>
-					<Route path="/" element={<App />} />
 					<Route path="/login" element={<LoginPage />} />
+					<Route path="/" element={<App />} />
 					{/* TODO path should be :business-slug */}
 					<Route element={
 						<ProtectedRoute>
 							<BusinessLayout />
 						</ProtectedRoute>
 					} path='/business'>
+
+						{/* <Route index element={<Navigate to="dashboard" />} /> */}
 						<Route path="dashboard" element={<DashboardPage />} />
+						<Route path="items/:slug" element={<ItemPage />} />
+						<Route path="items" element={<ItemsPage />} />
+						<Route path="inventory" element={<InventoryPage />} />
+						{/* <Route path="bakeoff" element={<BakeoffPage />} /> */}
+						{/* <Route path="bakeoff/:date" element={<DailyBakeOffPage />} /> */}
+						{/* <Route path="batches" element={<BatchesPage />} /> */}
+						{/* <Route path="batches/:id" element={<BatchViewPage />} /> */}
+						{/* <Route path="orders" element={<OrdersPage />} /> */}
+						{/* <Route path="orders/:date" element={<DailyOrdersPage />} /> */}
 					</Route>
 				</Routes>
 			</AuthProvider>

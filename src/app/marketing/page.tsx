@@ -1,7 +1,19 @@
 // Marketing is the main landing page for the domain
 // logged in users will be redirected to '/:business/dashboard'
+import { useEffect } from 'react';
+import { useNavigate } from "react-router";
+import { useAuth } from "@/context/auth";
 
 export default function Page() {
+		const navigate = useNavigate();
+		const {  user } = useAuth();
+		useEffect(() => {
+			if (user) {
+				// TODO get business slug from user data
+				navigate("/business/dashboard");
+			}
+		}, [user, navigate]);
+
 	return (
 					<main className="w-full max-w-4xl mt-8 flex flex-col gap-12">
 				{/* Jumbotron / Hero Section */}

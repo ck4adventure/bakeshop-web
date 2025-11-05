@@ -10,6 +10,7 @@ const HeaderBar = () => {
 	const handleLogout = async () => {
 		if (logout) {
 			await logout();
+			console.log("should nav to '/'")
 			navigate("/"); // SPA redirect
 		}
 	};
