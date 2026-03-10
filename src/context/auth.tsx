@@ -1,6 +1,8 @@
 // src/context/auth.tsx
 import { createContext, useContext, useEffect, useState } from 'react';
 
+const API_URL = import.meta.env.VITE_API_URL as string;
+
 type User = { sub: string; username: string; role: string; bakeryId: string | null; bakerySlug: string | null };
 type AuthContextType = {
 	user: User | null;
@@ -22,13 +24,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 	useEffect(() => {
 		const fetchProfile = async () => {
 			try {
-				const res = await fetch('http://localhost:3000/auth/profile', { credentials: 'include' });
+				const res = await fetch(`${API_URL}/auth/profile`, { credentials: 'include' });
 				if (res.ok) {
 					const data = await res.json();
-					console.log("data was: ", data);
 					setUser(data);
 				} else {
-					console.log("profile was not fetched")
 					setUser(null);
 				}
 			} finally {
@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 	const login = async (username: string, password: string) => {
 		setLoading(true);
 		try {
-			const res = await fetch('http://localhost:3000/auth/login', {
+			const res = await fetch(`${API_URL}/auth/login`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ username, password }),
@@ -50,15 +50,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 			if (!res.ok) return false;
 
 			// Fetch profile after successful login
-			const profileRes = await fetch('http://localhost:3000/auth/profile', { credentials: 'include' });
+			const profileRes = await fetch(`${API_URL}/auth/profile`, { credentials: 'include' });
 			if (profileRes.ok) {
 				const data = await profileRes.json();
 				setUser(data);
 			} else {
-				console.log("bad response: ", profileRes.json())
+				console.log("bad response: ", await profileRes.json());
 				setUser(null);
 			}
 			return true;
+		} catch (err) {
+			console.error('Login failed:', err);
+			return false;
 		} finally {
 			setLoading(false);
 		}
@@ -66,7 +69,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 	const logout = async () => {
 		setLoading(true);
-		await fetch('http://localhost:3000/auth/logout', { method: 'POST', credentials: 'include' });
+		await fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
 		setUser(null);
 		setLoading(false);
 	};
