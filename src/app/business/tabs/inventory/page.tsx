@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { Settings } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
@@ -219,6 +221,8 @@ const FILTERS: { val: Filter; label: string }[] = [
 
 export default function InventoryPage() {
   const { theme, toggle } = useTheme();
+  const navigate = useNavigate();
+  const { bakerySlug } = useParams();
 
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [nextDayQuotaMap, setNextDayQuotaMap] = useState<Record<number, number>>({});
@@ -318,13 +322,22 @@ export default function InventoryPage() {
                 : 'All items looking good'}
             </p>
           </div>
-          <button
-            onClick={toggle}
-            aria-label="Toggle dark mode"
-            className="w-10 h-10 rounded-full border border-border bg-background flex items-center justify-center text-lg cursor-pointer"
-          >
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => navigate(`/${bakerySlug}/items`)}
+              aria-label="Manage items"
+              className="w-10 h-10 rounded-full border border-border bg-background flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              <Settings size={18} />
+            </button>
+            <button
+              onClick={toggle}
+              aria-label="Toggle dark mode"
+              className="w-10 h-10 rounded-full border border-border bg-background flex items-center justify-center text-lg cursor-pointer"
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+          </div>
         </div>
 
         {/* Filter pills */}

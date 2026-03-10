@@ -1,0 +1,342 @@
+import { useState, useEffect, useId } from 'react';
+import { useNavigate } from 'react-router';
+import { ArrowLeft, Plus } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL as string;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Item = {
+  id: number;
+  name: string;
+  slug: string;
+  par: number | null;
+};
+
+// ─── Item sheet (add + edit) ──────────────────────────────────────────────────
+
+type SheetState =
+  | { mode: 'add' }
+  | { mode: 'edit'; item: Item };
+
+function ItemSheet({
+  state,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  state: SheetState;
+  onClose: () => void;
+  onSaved: (item: Item) => void;
+  onDeleted?: (id: number) => void;
+}) {
+  const nameId = useId();
+  const parId = useId();
+
+  const initial = state.mode === 'edit' ? state.item : null;
+  const [name, setName] = useState(initial?.name ?? '');
+  const [parInput, setParInput] = useState(initial?.par != null ? String(initial.par) : '');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const parsedPar = parInput.trim() === '' ? null : parseInt(parInput, 10);
+  const parValid = parInput.trim() === '' || (!isNaN(parsedPar!) && parsedPar! >= 0);
+
+  const handleSave = async () => {
+    if (!name.trim()) { setError('Name is required'); return; }
+    if (!parValid) { setError('Par must be a whole number (0 or more)'); return; }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = { name: name.trim() };
+      if (parsedPar !== null) body.par = parsedPar;
+
+      let res: Response;
+      if (state.mode === 'add') {
+        res = await fetch(`${API_URL}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        });
+      } else {
+        res = await fetch(`${API_URL}/items/${state.item.slug}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        });
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { message?: string }).message ?? 'Save failed');
+      }
+
+      const saved: Item = await res.json();
+      onSaved(saved);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (state.mode !== 'edit') return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/items/${state.item.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      onDeleted?.(state.item.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
+
+      <div className="relative bg-card rounded-t-[16px] px-6 pt-6 pb-10 z-10 max-w-[430px] w-full mx-auto">
+        <div className="w-9 h-1 bg-border rounded-full mx-auto mb-5" />
+
+        <h2 className="text-xl font-semibold text-foreground mb-6">
+          {state.mode === 'add' ? 'New Item' : 'Edit Item'}
+        </h2>
+
+        {error && (
+          <p className="text-sm mb-4 px-3 py-2 rounded-lg bg-destructive/10 text-destructive">{error}</p>
+        )}
+
+        {/* Name */}
+        <div className="mb-4">
+          <label htmlFor={nameId} className="block text-sm font-medium text-foreground mb-1.5">
+            Name
+          </label>
+          <input
+            id={nameId}
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. Sourdough Loaf"
+            className="w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        {/* Par */}
+        <div className="mb-7">
+          <label htmlFor={parId} className="block text-sm font-medium text-foreground mb-1.5">
+            Par level <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
+          <input
+            id={parId}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={parInput}
+            onChange={e => setParInput(e.target.value)}
+            placeholder="Minimum desired stock"
+            className="w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        {/* Save / Cancel */}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 h-14 rounded-full border border-border bg-transparent text-foreground text-[15px] font-medium cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-[2] h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+
+        {/* Delete (edit mode only) */}
+        {state.mode === 'edit' && (
+          <div className="mt-5 pt-5 border-t border-border">
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="w-full text-sm text-destructive cursor-pointer py-1"
+              >
+                Delete item
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-center text-muted-foreground">
+                  Delete <span className="font-semibold text-foreground">{state.item.name}</span>? This can't be undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="flex-1 h-11 rounded-full border border-border text-sm text-foreground cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 h-11 rounded-full bg-destructive text-white text-sm font-semibold cursor-pointer disabled:opacity-60"
+                  >
+                    {deleting ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
+export default function ItemsPage() {
+  const navigate = useNavigate();
+
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const res = await fetch(`${API_URL}/items`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load items');
+        setItems(await res.json());
+      } catch (err) {
+        setFetchError(err instanceof Error ? err.message : 'Something went wrong');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchItems();
+  }, []);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2800);
+  };
+
+  const handleSaved = (saved: Item) => {
+    setItems(prev => {
+      const idx = prev.findIndex(i => i.id === saved.id);
+      return idx >= 0
+        ? prev.map(i => i.id === saved.id ? saved : i)
+        : [...prev, saved];
+    });
+    const isNew = !items.some(i => i.id === saved.id);
+    showToast(isNew ? `${saved.name} added` : `${saved.name} updated`);
+    setSheet(null);
+  };
+
+  const handleDeleted = (id: number) => {
+    const item = items.find(i => i.id === id);
+    setItems(prev => prev.filter(i => i.id !== id));
+    showToast(`${item?.name ?? 'Item'} deleted`);
+    setSheet(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-card border-b border-border px-4 pt-5 pb-3 flex items-center gap-3">
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+          className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <div>
+          <h1 className="text-[22px] font-bold text-foreground leading-none">Items</h1>
+          {!loading && !fetchError && (
+            <p className="text-[13px] text-muted-foreground mt-0.5">
+              {items.length} item{items.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      </header>
+
+      {/* List */}
+      <main className="px-4 pt-3 pb-28 flex flex-col gap-2">
+        {loading && (
+          <p className="text-center text-muted-foreground pt-12" role="status">Loading…</p>
+        )}
+        {fetchError && (
+          <p className="text-center text-destructive pt-12">{fetchError}</p>
+        )}
+        {!loading && !fetchError && items.length === 0 && (
+          <div className="text-center pt-16 flex flex-col items-center gap-3">
+            <p className="text-muted-foreground">No items yet.</p>
+            <button
+              onClick={() => setSheet({ mode: 'add' })}
+              className="text-sm font-medium text-primary cursor-pointer"
+            >
+              Add your first item →
+            </button>
+          </div>
+        )}
+        {items.map(item => (
+          <button
+            key={item.id}
+            onClick={() => setSheet({ mode: 'edit', item })}
+            className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
+          >
+            <span className="text-[17px] font-medium text-foreground">{item.name}</span>
+            <span className="text-sm text-muted-foreground shrink-0 ml-4">
+              {item.par != null ? `par ${item.par}` : 'no par'}
+            </span>
+          </button>
+        ))}
+      </main>
+
+      {/* FAB */}
+      <button
+        onClick={() => setSheet({ mode: 'add' })}
+        aria-label="Add item"
+        className="fixed bottom-20 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-[0_4px_16px_rgba(194,105,42,0.35)] cursor-pointer z-20"
+      >
+        <Plus size={28} />
+      </button>
+
+      {/* Sheet */}
+      {sheet && (
+        <ItemSheet
+          state={sheet}
+          onClose={() => setSheet(null)}
+          onSaved={handleSaved}
+          onDeleted={handleDeleted}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-medium z-40 shadow-lg whitespace-nowrap"
+        >
+          ✓ {toast}
+        </div>
+      )}
+    </div>
+  );
+}
