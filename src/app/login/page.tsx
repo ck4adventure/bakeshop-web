@@ -1,5 +1,5 @@
 // LoginPage for business users
-// currently will redirect to /:business/dashboard on OK login
+// Redirects to /:bakerySlug/dashboard on successful login
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,25 +16,23 @@ export default function LoginPage() {
 	const { login, loading, user } = useAuth();
 	const navigate = useNavigate();
 
-
 	useEffect(() => {
 		if (user) {
-			// TODO get business slug from user data
-			navigate("/business/dashboard");
+			const dest = user.bakerySlug ? `/${user.bakerySlug}/dashboard` : "/";
+			navigate(dest, { replace: true });
 		}
 	}, [user, navigate]);
 
 	if (loading) return <div>Loading...</div>;
-	
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError(null);
 		const success = await login(username, password);
-		if (success) {
-			navigate("/dashboard");
-		} else {
-			setError("Invalid email or password");
+		if (!success) {
+			setError("Invalid username or password");
 		}
+		// Navigation is handled by the useEffect above once user state is set
 	};
 
 	return (
@@ -53,7 +51,7 @@ export default function LoginPage() {
 					<Label htmlFor="username">Username</Label>
 					<Input
 						id="username"
-						type="username"
+						type="text"
 						placeholder="baker"
 						value={username}
 						onChange={e => setUsername(e.target.value)}

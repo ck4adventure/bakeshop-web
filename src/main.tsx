@@ -20,12 +20,12 @@ createRoot(document.getElementById('root')!).render(
 				<Routes>
 					<Route path="/" element={<App />} />
 					<Route path="/login" element={<LoginPage />} />
-					{/* TODO path should be :business-slug */}
+					
 					<Route element={
 						<ProtectedRoute>
 							<BusinessLayout />
 						</ProtectedRoute>
-					} path='/business'>
+					} path='/:bakerySlug'>
 						<Route path="dashboard" element={<DashboardPage />} />
 					</Route>
 				</Routes>

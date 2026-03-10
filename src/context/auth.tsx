@@ -1,7 +1,7 @@
 // src/context/auth.tsx
 import { createContext, useContext, useEffect, useState } from 'react';
 
-type User = { sub: any; username: string };
+type User = { sub: string; username: string; role: string; bakerySlug: string | null };
 type AuthContextType = {
 	user: User | null;
 	loading: boolean;
