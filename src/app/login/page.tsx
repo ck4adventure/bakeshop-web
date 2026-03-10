@@ -18,7 +18,7 @@ export default function LoginPage() {
 
 	useEffect(() => {
 		if (user) {
-			const dest = user.bakerySlug ? `/${user.bakerySlug}/dashboard` : "/";
+			const dest = user.bakerySlug ? `/${user.bakerySlug}/inventory` : "/";
 			navigate(dest, { replace: true });
 		}
 	}, [user, navigate]);
