@@ -133,20 +133,31 @@ function ItemCard({
   );
 }
 
-function AddBatchModal({
+type ModalMode = 'batch' | 'adjust';
+
+function ItemModal({
   item,
-  nextDayQuota,
   onClose,
-  onConfirm,
+  onBatchConfirm,
+  onAdjustConfirm,
   saving,
 }: {
   item: InventoryItem;
-  nextDayQuota: number | null;
   onClose: () => void;
-  onConfirm: (item: InventoryItem, count: number) => void;
+  onBatchConfirm: (item: InventoryItem, count: number) => void;
+  onAdjustConfirm: (item: InventoryItem, quantity: number, note: string) => void;
   saving: boolean;
 }) {
-  const [count, setCount] = useState(item.item.defaultBatchQty ?? 1);
+  const [mode, setMode] = useState<ModalMode>('batch');
+
+  // Batch state
+  const [batchCount, setBatchCount] = useState(item.item.defaultBatchQty ?? 1);
+
+  // Adjust state — quantity signed (+/-), note required
+  const [adjDelta, setAdjDelta] = useState(0);
+  const [adjNote, setAdjNote] = useState('');
+  const newStock = item.quantity + adjDelta;
+  const adjValid = adjDelta !== 0 && adjNote.trim().length > 0 && newStock >= 0;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
@@ -155,52 +166,115 @@ function AddBatchModal({
       <div className="relative bg-card rounded-t-[16px] px-6 pt-6 pb-10 z-10 max-w-[430px] w-full mx-auto">
         <div className="w-9 h-1 bg-border rounded-full mx-auto mb-5" />
 
-        <p className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground mb-1">
-          Add Batch
-        </p>
+        {/* Mode toggle */}
+        <div className="flex rounded-full border border-border overflow-hidden mb-5">
+          <button
+            onClick={() => setMode('batch')}
+            className={`flex-1 py-2 text-[13px] font-medium cursor-pointer transition-colors ${
+              mode === 'batch' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+            }`}
+          >
+            Add Batch
+          </button>
+          <button
+            onClick={() => setMode('adjust')}
+            className={`flex-1 py-2 text-[13px] font-medium cursor-pointer transition-colors ${
+              mode === 'adjust' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+            }`}
+          >
+            Adjust Stock
+          </button>
+        </div>
+
         <h2 className="text-xl font-semibold text-foreground mb-6">{item.item.name}</h2>
 
-        {/* Count incrementer */}
-        <div className="flex items-center justify-center gap-6 mb-7">
-          <button
-            onClick={() => setCount(c => Math.max(1, c - 1))}
-            aria-label="Decrease quantity"
-            className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer"
-          >
-            −
-          </button>
-          <div className="text-center w-20">
-            <div className="text-5xl font-bold text-foreground leading-none">{count}</div>
-            {item.item.defaultBatchQty !== null && (
-              <div className="text-[13px] text-muted-foreground mt-1">
-                default: {item.item.defaultBatchQty}
+        {mode === 'batch' ? (
+          <>
+            <div className="flex items-center justify-center gap-6 mb-7">
+              <button onClick={() => setBatchCount(c => Math.max(1, c - 1))} aria-label="Decrease quantity"
+                className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer">
+                −
+              </button>
+              <div className="text-center w-20">
+                <div className="text-5xl font-bold text-foreground leading-none">{batchCount}</div>
+                {item.item.defaultBatchQty !== null && (
+                  <div className="text-[13px] text-muted-foreground mt-1">default: {item.item.defaultBatchQty}</div>
+                )}
               </div>
-            )}
-          </div>
-          <button
-            onClick={() => setCount(c => c + 1)}
-            aria-label="Increase quantity"
-            className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer"
-          >
-            +
-          </button>
-        </div>
+              <button onClick={() => setBatchCount(c => c + 1)} aria-label="Increase quantity"
+                className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer">
+                +
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={onClose}
+                className="flex-1 h-14 rounded-full border border-border bg-transparent text-foreground text-[15px] font-medium cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={() => onBatchConfirm(item, batchCount)} disabled={saving}
+                className="flex-[2] h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60">
+                {saving ? 'Saving…' : 'Save Batch'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[13px] text-muted-foreground mb-4">
+              Current stock: <span className="font-semibold text-foreground">{item.quantity}</span>
+              {adjDelta !== 0 && (
+                <span className={`ml-2 font-semibold ${newStock < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                  → {newStock}
+                </span>
+              )}
+            </p>
 
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 h-14 rounded-full border border-border bg-transparent text-foreground text-[15px] font-medium cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => onConfirm(item, count)}
-            disabled={saving}
-            className="flex-[2] h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Save Batch'}
-          </button>
-        </div>
+            {/* Signed quantity stepper */}
+            <div className="flex items-center justify-center gap-6 mb-5">
+              <button onClick={() => setAdjDelta(d => d - 1)} aria-label="Decrease"
+                className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer">
+                −
+              </button>
+              <div className="text-center w-24">
+                <div className={`text-5xl font-bold leading-none ${adjDelta > 0 ? 'text-foreground' : adjDelta < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {adjDelta > 0 ? `+${adjDelta}` : adjDelta}
+                </div>
+                <div className="text-[13px] text-muted-foreground mt-1">change</div>
+              </div>
+              <button onClick={() => setAdjDelta(d => d + 1)} aria-label="Increase"
+                className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer">
+                +
+              </button>
+            </div>
+
+            {/* Required note */}
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                Reason <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                value={adjNote}
+                onChange={e => setAdjNote(e.target.value)}
+                placeholder="e.g. Dropped tray, miscounted on last batch, transferred to other location"
+                rows={2}
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={onClose}
+                className="flex-1 h-14 rounded-full border border-border bg-transparent text-foreground text-[15px] font-medium cursor-pointer">
+                Cancel
+              </button>
+              <button
+                onClick={() => onAdjustConfirm(item, adjDelta, adjNote)}
+                disabled={saving || !adjValid}
+                className="flex-[2] h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60"
+              >
+                {saving ? 'Saving…' : 'Save Adjustment'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -285,6 +359,31 @@ export default function InventoryPage() {
       showToast(`+${count} ${item.item.name} added`);
     } catch {
       showToast('Failed to save batch — please try again');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleConfirmAdjust = async (item: InventoryItem, delta: number, note: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/inventory/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ itemId: item.itemId, quantity: delta, note }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { message?: string }).message ?? 'Failed to save adjustment');
+      }
+      setInventory(inv =>
+        inv.map(i => i.id === item.id ? { ...i, quantity: i.quantity + delta } : i)
+      );
+      setSelectedItem(null);
+      showToast(`${item.item.name} adjusted ${delta > 0 ? `+${delta}` : delta}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setSaving(false);
     }
@@ -379,13 +478,13 @@ export default function InventoryPage() {
         ))}
       </main>
 
-      {/* Batch modal */}
+      {/* Item modal (batch + adjust) */}
       {selectedItem && (
-        <AddBatchModal
+        <ItemModal
           item={selectedItem}
-          nextDayQuota={nextDayQuotaMap[selectedItem.itemId] ?? null}
           onClose={() => setSelectedItem(null)}
-          onConfirm={handleConfirmBatch}
+          onBatchConfirm={handleConfirmBatch}
+          onAdjustConfirm={handleConfirmAdjust}
           saving={saving}
         />
       )}
