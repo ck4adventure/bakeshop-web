@@ -11,7 +11,7 @@ type InventoryItem = {
   id: number;
   itemId: number;
   quantity: number;
-  item: { name: string; slug: string; par: number | null };
+  item: { name: string; slug: string; par: number | null; defaultBatchQty: number | null };
 };
 
 type ScheduleEntry = {
@@ -113,9 +113,6 @@ function ItemCard({
             <div className="text-[26px] font-bold leading-none text-foreground">
               {item.quantity}
             </div>
-            {par !== null && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">par {par}</div>
-            )}
           </div>
         </div>
 
@@ -123,7 +120,8 @@ function ItemCard({
 
         {/* Bottom row: status pill + tomorrow quota */}
         <div className="flex justify-between items-center mt-2.5">
-          <StatusPill status={status} />
+          {status !== 'good' && <StatusPill status={status} />}
+          {status === 'good' && <span />}
           {nextDayQuota !== null && (
             <div className="text-xs text-muted-foreground">
               Tomorrow: <span className="font-semibold text-foreground">{nextDayQuota}</span>
@@ -148,7 +146,7 @@ function AddBatchModal({
   onConfirm: (item: InventoryItem, count: number) => void;
   saving: boolean;
 }) {
-  const [count, setCount] = useState(nextDayQuota ?? 1);
+  const [count, setCount] = useState(item.item.defaultBatchQty ?? 1);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
@@ -173,9 +171,9 @@ function AddBatchModal({
           </button>
           <div className="text-center w-20">
             <div className="text-5xl font-bold text-foreground leading-none">{count}</div>
-            {nextDayQuota !== null && (
+            {item.item.defaultBatchQty !== null && (
               <div className="text-[13px] text-muted-foreground mt-1">
-                expected yield: {nextDayQuota}
+                default: {item.item.defaultBatchQty}
               </div>
             )}
           </div>

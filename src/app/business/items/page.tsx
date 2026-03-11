@@ -11,6 +11,7 @@ type Item = {
   name: string;
   slug: string;
   par: number | null;
+  defaultBatchQty: number | null;
 };
 
 // ─── Item sheet (add + edit) ──────────────────────────────────────────────────
@@ -32,10 +33,12 @@ function ItemSheet({
 }) {
   const nameId = useId();
   const parId = useId();
+  const defaultBatchQtyId = useId();
 
   const initial = state.mode === 'edit' ? state.item : null;
   const [name, setName] = useState(initial?.name ?? '');
   const [parInput, setParInput] = useState(initial?.par != null ? String(initial.par) : '');
+  const [defaultBatchQtyInput, setDefaultBatchQtyInput] = useState(initial?.defaultBatchQty != null ? String(initial.defaultBatchQty) : '');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -43,16 +46,20 @@ function ItemSheet({
 
   const parsedPar = parInput.trim() === '' ? null : parseInt(parInput, 10);
   const parValid = parInput.trim() === '' || (!isNaN(parsedPar!) && parsedPar! >= 0);
+  const parsedDefaultBatchQty = defaultBatchQtyInput.trim() === '' ? null : parseInt(defaultBatchQtyInput, 10);
+  const defaultBatchQtyValid = defaultBatchQtyInput.trim() === '' || (!isNaN(parsedDefaultBatchQty!) && parsedDefaultBatchQty! >= 1);
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Name is required'); return; }
     if (!parValid) { setError('Par must be a whole number (0 or more)'); return; }
+    if (!defaultBatchQtyValid) { setError('Default batch qty must be a whole number (1 or more)'); return; }
 
     setSaving(true);
     setError(null);
     try {
       const body: Record<string, unknown> = { name: name.trim() };
       if (parsedPar !== null) body.par = parsedPar;
+      if (parsedDefaultBatchQty !== null) body.defaultBatchQty = parsedDefaultBatchQty;
 
       let res: Response;
       if (state.mode === 'add') {
@@ -132,7 +139,7 @@ function ItemSheet({
         </div>
 
         {/* Par */}
-        <div className="mb-7">
+        <div className="mb-4">
           <label htmlFor={parId} className="block text-sm font-medium text-foreground mb-1.5">
             Par level <span className="text-muted-foreground font-normal">(optional)</span>
           </label>
@@ -143,7 +150,24 @@ function ItemSheet({
             min={0}
             value={parInput}
             onChange={e => setParInput(e.target.value)}
-            placeholder="Minimum desired stock"
+            placeholder="Minimum desired frozen stock"
+            className="w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        {/* Default batch qty */}
+        <div className="mb-7">
+          <label htmlFor={defaultBatchQtyId} className="block text-sm font-medium text-foreground mb-1.5">
+            Default batch qty <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
+          <input
+            id={defaultBatchQtyId}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            value={defaultBatchQtyInput}
+            onChange={e => setDefaultBatchQtyInput(e.target.value)}
+            placeholder="How many per batch run"
             className="w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -301,9 +325,12 @@ export default function ItemsPage() {
             className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
           >
             <span className="text-[17px] font-medium text-foreground">{item.name}</span>
-            <span className="text-sm text-muted-foreground shrink-0 ml-4">
-              {item.par != null ? `par ${item.par}` : 'no par'}
-            </span>
+            <div className="text-right shrink-0 ml-4">
+              <div className="text-sm text-muted-foreground">{item.par != null ? `par ${item.par}` : 'no par'}</div>
+              {item.defaultBatchQty != null && (
+                <div className="text-xs text-muted-foreground/70">batch {item.defaultBatchQty}</div>
+              )}
+            </div>
           </button>
         ))}
       </main>
