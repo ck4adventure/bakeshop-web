@@ -18,6 +18,7 @@ type ScheduleEntry = {
   weekday: string;
   quantity: number;
   item: { name: string; slug: string };
+  isOverridden?: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,9 +93,17 @@ function BakeCard({
       <div className="pl-2">
         {/* Top row */}
         <div className="flex justify-between items-start">
-          <span className="text-[17px] font-medium text-foreground leading-snug">
-            {entry.item.name}
-          </span>
+          <div>
+            <span className="text-[17px] font-medium text-foreground leading-snug">
+              {entry.item.name}
+            </span>
+            {entry.isOverridden && (
+              <span className="ml-2 text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
+                style={{ background: 'var(--status-below-par-bg)', color: 'var(--status-below-par-text)' }}>
+                override
+              </span>
+            )}
+          </div>
           <div className="text-right ml-4 shrink-0">
             <span className="text-[26px] font-bold text-foreground leading-none">
               {isBaked ? bakedQty : quota}
@@ -301,13 +310,30 @@ export default function TodayPage() {
         if (!invRes.ok) throw new Error('Failed to load inventory');
         if (!schedRes.ok) throw new Error('Failed to load schedule');
 
-        const [invData, schedData]: [InventoryRecord[], ScheduleEntry[]] = await Promise.all([
+        const todayDateStr = new Date().toISOString().split('T')[0];
+        const overridesRes = await fetch(
+          `${API_URL}/production-schedule/overrides?date=${todayDateStr}`,
+          { credentials: 'include' },
+        );
+
+        const [invData, schedData, overridesData]: [InventoryRecord[], ScheduleEntry[], { itemId: number; quantity: number }[]] = await Promise.all([
           invRes.json(),
           schedRes.json(),
+          overridesRes.ok ? overridesRes.json() : Promise.resolve([]),
         ]);
 
         const today = getTodayWeekday();
         const todayEntries = schedData.filter(e => e.weekday === today);
+
+        // Apply any overrides on top of the weekly template
+        const overrideQtyMap: Record<number, number> = {};
+        for (const o of overridesData) overrideQtyMap[o.itemId] = o.quantity;
+        for (const entry of todayEntries) {
+          if (overrideQtyMap[entry.itemId] !== undefined) {
+            entry.quantity = overrideQtyMap[entry.itemId];
+            entry.isOverridden = true;
+          }
+        }
 
         const invMap: Record<number, number> = {};
         for (const rec of invData) invMap[rec.itemId] = rec.quantity;
