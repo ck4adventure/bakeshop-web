@@ -156,6 +156,7 @@ function QuotaSheet({
 export default function SchedulePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [scheduleMap, setScheduleMap] = useState<ScheduleMap>({});
+  const [operatingDays, setOperatingDays] = useState<Weekday[]>([...WEEKDAYS]); // default all days
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -167,16 +168,18 @@ export default function SchedulePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [itemsRes, schedRes] = await Promise.all([
+        const [itemsRes, schedRes, settingsRes] = await Promise.all([
           fetch(`${API_URL}/items`, { credentials: 'include' }),
           fetch(`${API_URL}/production-schedule`, { credentials: 'include' }),
+          fetch(`${API_URL}/bakery/settings`, { credentials: 'include' }),
         ]);
         if (!itemsRes.ok) throw new Error('Failed to load items');
         if (!schedRes.ok) throw new Error('Failed to load schedule');
 
-        const [itemsData, schedData]: [Item[], ScheduleEntry[]] = await Promise.all([
+        const [itemsData, schedData, settingsData]: [Item[], ScheduleEntry[], { operatingDays: Weekday[] }] = await Promise.all([
           itemsRes.json(),
           schedRes.json(),
+          settingsRes.ok ? settingsRes.json() : Promise.resolve({ operatingDays: [] }),
         ]);
 
         setItems(itemsData);
@@ -187,6 +190,17 @@ export default function SchedulePage() {
           map[entry.weekday][entry.itemId] = entry.quantity;
         }
         setScheduleMap(map);
+
+        // If operating days are configured, filter the visible days
+        if (settingsData.operatingDays.length > 0) {
+          setOperatingDays(settingsData.operatingDays);
+          // If today is not an operating day, select the first operating day
+          const todayName = WEEKDAYS[getTodayIdx()];
+          if (!settingsData.operatingDays.includes(todayName)) {
+            const firstOpIdx = WEEKDAYS.indexOf(settingsData.operatingDays[0]);
+            if (firstOpIdx >= 0) setSelectedDayIdx(firstOpIdx);
+          }
+        }
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : 'Something went wrong');
       } finally {
@@ -240,9 +254,10 @@ export default function SchedulePage() {
           )}
         </div>
 
-        {/* Day pills */}
+        {/* Day pills — only operating days */}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
           {WEEKDAYS.map((day, idx) => {
+            if (!operatingDays.includes(day)) return null;
             const isSelected = idx === selectedDayIdx;
             const isToday = idx === todayIdx;
             return (

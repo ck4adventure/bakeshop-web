@@ -13,6 +13,7 @@ import TodayPage from './app/business/tabs/today/page.tsx';
 import BatchesPage from './app/business/tabs/batches/page.tsx';
 import SchedulePage from './app/business/tabs/schedule/page.tsx';
 import ItemsPage from './app/business/items/page.tsx';
+import SettingsPage from './app/business/settings/page.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -36,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="batches" element={<BatchesPage />} />
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="items" element={<ItemsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
             {/* legacy redirect */}
             <Route path="dashboard" element={<Navigate to="inventory" replace />} />
           </Route>
