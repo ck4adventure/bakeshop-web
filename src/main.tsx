@@ -10,10 +10,11 @@ import { AuthProvider } from '@/context/auth';
 import BusinessLayout from './app/business/layout.tsx';
 import InventoryPage from './app/business/tabs/inventory/page.tsx';
 import TodayPage from './app/business/tabs/today/page.tsx';
-import BatchesPage from './app/business/tabs/batches/page.tsx';
+import HistoryPage from './app/business/tabs/history/page.tsx';
 import SchedulePage from './app/business/tabs/schedule/page.tsx';
 import ItemsPage from './app/business/items/page.tsx';
 import SettingsPage from './app/business/settings/page.tsx';
+import OperatingDaysPage from './app/business/operating-days/page.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -34,10 +35,12 @@ createRoot(document.getElementById('root')!).render(
             <Route index element={<Navigate to="inventory" replace />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="today" element={<TodayPage />} />
-            <Route path="batches" element={<BatchesPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="batches" element={<Navigate to="history" replace />} />
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="items" element={<ItemsPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="operating-days" element={<OperatingDaysPage />} />
             {/* legacy redirect */}
             <Route path="dashboard" element={<Navigate to="inventory" replace />} />
           </Route>

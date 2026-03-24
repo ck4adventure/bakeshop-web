@@ -1,7 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { Settings } from 'lucide-react';
-import { useTheme } from '@/hooks/useTheme';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
@@ -292,10 +289,6 @@ const FILTERS: { val: Filter; label: string }[] = [
 ];
 
 export default function InventoryPage() {
-  const { theme, toggle } = useTheme();
-  const navigate = useNavigate();
-  const { bakerySlug } = useParams();
-
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [nextDayQuotaMap, setNextDayQuotaMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
@@ -353,7 +346,7 @@ export default function InventoryPage() {
       });
       if (!res.ok) throw new Error('Failed to save batch');
       setInventory(inv =>
-        inv.map(i => i.id === item.id ? { ...i, quantity: i.quantity + count } : i)
+        inv.map(i => i.itemId === item.itemId ? { ...i, quantity: i.quantity + count } : i)
       );
       setSelectedItem(null);
       showToast(`+${count} ${item.item.name} added`);
@@ -378,7 +371,7 @@ export default function InventoryPage() {
         throw new Error((data as { message?: string }).message ?? 'Failed to save adjustment');
       }
       setInventory(inv =>
-        inv.map(i => i.id === item.id ? { ...i, quantity: i.quantity + delta } : i)
+        inv.map(i => i.itemId === item.itemId ? { ...i, quantity: i.quantity + delta } : i)
       );
       setSelectedItem(null);
       showToast(`${item.item.name} adjusted ${delta > 0 ? `+${delta}` : delta}`);
@@ -410,32 +403,12 @@ export default function InventoryPage() {
     <div className="min-h-screen bg-background">
       {/* Sticky header */}
       <header className="sticky top-0 z-10 bg-card border-b border-border px-4 pt-5 pb-3">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-[22px] font-bold text-foreground">Inventory</h1>
-            <p className="text-[13px] text-muted-foreground mt-0.5">
-              {needsAttentionCount > 0
-                ? `${needsAttentionCount} item${needsAttentionCount !== 1 ? 's' : ''} need attention`
-                : 'All items looking good'}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => navigate(`/${bakerySlug}/items`)}
-              aria-label="Manage items"
-              className="w-10 h-10 rounded-full border border-border bg-background flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              <Settings size={18} />
-            </button>
-            <button
-              onClick={toggle}
-              aria-label="Toggle dark mode"
-              className="w-10 h-10 rounded-full border border-border bg-background flex items-center justify-center text-lg cursor-pointer"
-            >
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
-          </div>
-        </div>
+        <h1 className="text-[22px] font-bold text-foreground">Inventory</h1>
+        <p className="text-[13px] text-muted-foreground mt-0.5">
+          {needsAttentionCount > 0
+            ? `${needsAttentionCount} item${needsAttentionCount !== 1 ? 's' : ''} need attention`
+            : 'All items looking good'}
+        </p>
 
         {/* Filter pills */}
         <div className="flex gap-2 mt-3">
@@ -470,7 +443,7 @@ export default function InventoryPage() {
         )}
         {displayed.map(item => (
           <ItemCard
-            key={item.id}
+            key={item.itemId}
             item={item}
             nextDayQuota={nextDayQuotaMap[item.itemId] ?? null}
             onClick={setSelectedItem}

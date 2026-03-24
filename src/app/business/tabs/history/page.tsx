@@ -78,7 +78,7 @@ export default function BatchesPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 bg-card border-b border-border px-4 pt-5 pb-3">
-        <h1 className="text-[22px] font-bold text-foreground">Batches</h1>
+        <h1 className="text-[22px] font-bold text-foreground">History</h1>
         {!loading && !fetchError && (
           <p className="text-[13px] text-muted-foreground mt-0.5">
             {batches.length === 0 ? 'No batches logged yet' : `${batches.length} batch${batches.length !== 1 ? 'es' : ''} logged`}

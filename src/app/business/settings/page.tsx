@@ -3,76 +3,35 @@ import { useNavigate } from 'react-router';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
-type Weekday = typeof WEEKDAYS[number];
-
 type BakerySettings = {
   id: string;
   name: string;
   slug: string;
-  operatingDays: Weekday[];
 };
+
+function NavRow({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between px-4 py-3.5 rounded-[12px] border border-border bg-card text-foreground cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
+    >
+      <span className="text-[17px] font-medium">{label}</span>
+      <span className="text-muted-foreground text-lg">›</span>
+    </button>
+  );
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-
   const [settings, setSettings] = useState<BakerySettings | null>(null);
-  const [selected, setSelected] = useState<Set<Weekday>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await fetch(`${API_URL}/bakery/settings`, { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to load settings');
-        const data: BakerySettings = await res.json();
-        setSettings(data);
-        setSelected(new Set(data.operatingDays));
-      } catch (err) {
-        setFetchError(err instanceof Error ? err.message : 'Something went wrong');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSettings();
+    fetch(`${API_URL}/bakery/settings`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setSettings(data); })
+      .finally(() => setLoading(false));
   }, []);
-
-  const toggle = (day: Weekday) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.has(day) ? next.delete(day) : next.add(day);
-      return next;
-    });
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch(`${API_URL}/bakery/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ operatingDays: Array.from(selected) }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { message?: string }).message ?? 'Save failed');
-      }
-      showToast('Settings saved');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2800);
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,72 +51,22 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      <main className="px-4 pt-5 pb-28">
-        {loading && (
-          <p className="text-center text-muted-foreground pt-12" role="status">Loading…</p>
-        )}
-        {fetchError && (
-          <p className="text-center text-destructive pt-12">{fetchError}</p>
-        )}
-
-        {!loading && !fetchError && (
-          <>
+      {!loading && (
+        <main className="px-4 pt-5 pb-28 flex flex-col gap-8">
+          <section>
             <p className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Operating Days
+              Catalog
             </p>
-            <p className="text-[13px] text-muted-foreground mb-4">
-              Select the days your bakery is open. The schedule tab will only show these days for quota-setting.
+            <NavRow label="Manage Items" onClick={() => navigate('../items')} />
+          </section>
+
+          <section>
+            <p className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Setup
             </p>
-
-            <div className="flex flex-col gap-2">
-              {WEEKDAYS.map(day => {
-                const isOn = selected.has(day);
-                return (
-                  <button
-                    key={day}
-                    onClick={() => toggle(day)}
-                    className={`w-full flex items-center justify-between px-4 py-3.5 rounded-[12px] border transition-colors cursor-pointer ${
-                      isOn
-                        ? 'bg-primary/10 border-primary text-foreground'
-                        : 'bg-card border-border text-muted-foreground'
-                    }`}
-                  >
-                    <span className={`text-[17px] font-medium ${isOn ? 'text-foreground' : ''}`}>
-                      {day}
-                    </span>
-                    <span
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                        isOn ? 'bg-primary border-primary' : 'border-border'
-                      }`}
-                    >
-                      {isOn && (
-                        <span className="text-primary-foreground text-[11px] font-bold leading-none">✓</span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="mt-6 w-full h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60"
-            >
-              {saving ? 'Saving…' : 'Save Settings'}
-            </button>
-          </>
-        )}
-      </main>
-
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-foreground text-background px-5 py-2.5 rounded-full text-sm font-medium z-40 shadow-lg whitespace-nowrap"
-        >
-          {toast}
-        </div>
+            <NavRow label="Operating Days" onClick={() => navigate('../operating-days')} />
+          </section>
+        </main>
       )}
     </div>
   );

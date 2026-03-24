@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
-import { useAuth } from '@/context/auth';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
@@ -281,8 +279,6 @@ function AttentionCard({ record }: { record: InventoryRecord }) {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TodayPage() {
-  const { logout } = useAuth();
-  const navigate = useNavigate();
 
   const [bakeList, setBakeList] = useState<{ entry: ScheduleEntry; stock: number }[]>([]);
   const [attentionItems, setAttentionItems] = useState<InventoryRecord[]>([]);
@@ -294,11 +290,6 @@ export default function TodayPage() {
   const [selectedBake, setSelectedBake] = useState<{ entry: ScheduleEntry; stock: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/');
-  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -424,17 +415,9 @@ export default function TodayPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-card border-b border-border px-4 pt-5 pb-3 flex justify-between items-start">
-        <div>
-          <h1 className="text-[22px] font-bold text-foreground">{getGreeting()}</h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">{formatDate()}</p>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer mt-1"
-        >
-          Log out
-        </button>
+      <header className="sticky top-0 z-10 bg-card border-b border-border px-4 pt-5 pb-3">
+        <h1 className="text-[22px] font-bold text-foreground">{getGreeting()}</h1>
+        <p className="text-[13px] text-muted-foreground mt-0.5">{formatDate()}</p>
       </header>
 
       <main className="px-4 pt-4 pb-24 flex flex-col gap-5">

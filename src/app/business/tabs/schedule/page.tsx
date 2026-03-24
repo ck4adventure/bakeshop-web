@@ -15,6 +15,12 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 type Weekday = typeof WEEKDAYS[number];
 
+// Rotate WEEKDAYS so the bakery's first operating day comes first
+function getOrderedWeekdays(startDay: Weekday): Weekday[] {
+  const startIdx = WEEKDAYS.indexOf(startDay);
+  return [...WEEKDAYS.slice(startIdx), ...WEEKDAYS.slice(0, startIdx)] as Weekday[];
+}
+
 function getTodayIdx(): number {
   return new Date().getDay();
 }
@@ -244,6 +250,7 @@ export default function SchedulePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [scheduleMap, setScheduleMap] = useState<ScheduleMap>({});
   const [operatingDays, setOperatingDays] = useState<Weekday[]>([...WEEKDAYS]);
+  const [weekStart, setWeekStart] = useState<Weekday>('Sunday');
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -254,6 +261,9 @@ export default function SchedulePage() {
   // Override mode state
   const [mode, setMode] = useState<Mode>('weekly');
   const upcomingDates = getUpcomingDates();
+  const filteredUpcomingDates = operatingDays.length === 0
+    ? upcomingDates
+    : upcomingDates.filter(d => operatingDays.includes(WEEKDAYS[d.weekdayIdx]));
   const [selectedDateIdx, setSelectedDateIdx] = useState(0);
   const [overrideMap, setOverrideMap] = useState<OverrideMap>({});
   const [overridesLoading, setOverridesLoading] = useState(false);
@@ -289,11 +299,17 @@ export default function SchedulePage() {
 
         if (settingsData.operatingDays.length > 0) {
           setOperatingDays(settingsData.operatingDays);
+          setWeekStart(settingsData.operatingDays[0]);
           const todayName = WEEKDAYS[getTodayIdx()];
           if (!settingsData.operatingDays.includes(todayName)) {
             const firstOpIdx = WEEKDAYS.indexOf(settingsData.operatingDays[0]);
             if (firstOpIdx >= 0) setSelectedDayIdx(firstOpIdx);
           }
+          // Snap override date selection to the first upcoming operating day
+          const firstValidOverrideIdx = getUpcomingDates().findIndex(
+            d => settingsData.operatingDays.includes(WEEKDAYS[d.weekdayIdx])
+          );
+          if (firstValidOverrideIdx >= 0) setSelectedDateIdx(firstValidOverrideIdx);
         }
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : 'Something went wrong');
@@ -416,8 +432,9 @@ export default function SchedulePage() {
         {/* Day / date pills */}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
           {mode === 'weekly'
-            ? WEEKDAYS.map((day, idx) => {
+            ? getOrderedWeekdays(weekStart).map((day) => {
                 if (!operatingDays.includes(day)) return null;
+                const idx = WEEKDAYS.indexOf(day);
                 const isSelected = idx === selectedDayIdx;
                 const isToday = idx === todayIdx;
                 return (
@@ -431,11 +448,12 @@ export default function SchedulePage() {
                   </button>
                 );
               })
-            : upcomingDates.map((d, idx) => {
-                const isSelected = idx === selectedDateIdx;
-                const hasOverride = Object.keys(overrideMap).length > 0 && idx === selectedDateIdx;
+            : filteredUpcomingDates.map((d) => {
+                const origIdx = upcomingDates.indexOf(d);
+                const isSelected = origIdx === selectedDateIdx;
+                const hasOverride = Object.keys(overrideMap).length > 0 && isSelected;
                 return (
-                  <button key={d.dateStr} onClick={() => setSelectedDateIdx(idx)}
+                  <button key={d.dateStr} onClick={() => setSelectedDateIdx(origIdx)}
                     className={`flex flex-col items-center px-3 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors shrink-0 ${
                       isSelected ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border'
                     }`}

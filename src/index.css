@@ -3,6 +3,9 @@
 /* ─── Dark mode via .dark class on <html> ─────────────────────────────────── */
 @custom-variant dark (&:is(.dark *));
 
+/* ─── Landscape orientation variant ──────────────────────────────────────── */
+@custom-variant landscape (@media (orientation: landscape));
+
 /* ─── Design system tokens ────────────────────────────────────────────────── */
 :root {
   /* Backgrounds */
