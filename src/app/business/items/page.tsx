@@ -14,6 +14,64 @@ type Item = {
   defaultBatchQty: number | null;
 };
 
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+type Weekday = typeof WEEKDAYS[number];
+
+// ─── Numeric field with +/− buttons ──────────────────────────────────────────
+
+function NumericField({
+  id,
+  value,
+  onChange,
+  min = 0,
+}: {
+  id?: string;
+  value: string;
+  onChange: (val: string) => void;
+  min?: number;
+}) {
+  const num = value.trim() === '' ? null : parseInt(value, 10);
+  const atMin = num !== null && num <= min;
+
+  const increment = () => {
+    const next = num !== null ? num + 1 : min;
+    onChange(String(next));
+  };
+
+  const decrement = () => {
+    if (num === null || num <= min) return;
+    onChange(String(num - 1));
+  };
+
+  return (
+    <div className="flex items-center">
+      <input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={min}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="—"
+        className="w-[4ch] h-10 rounded-l-lg border border-border bg-background px-1 text-[15px] text-center text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <div className="flex flex-col h-10 rounded-r-lg overflow-hidden border-t border-r border-b border-border -ml-px">
+        <button
+          type="button"
+          onClick={increment}
+          className="flex-1 px-1.5 bg-background text-foreground text-xs flex items-center justify-center cursor-pointer hover:bg-muted transition-colors border-b border-border"
+        >▲</button>
+        <button
+          type="button"
+          onClick={decrement}
+          disabled={num === null || atMin}
+          className="flex-1 px-1.5 bg-background text-foreground text-xs flex items-center justify-center cursor-pointer hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-default"
+        >▼</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Item sheet (add + edit) ──────────────────────────────────────────────────
 
 type SheetState =
@@ -44,6 +102,46 @@ function ItemSheet({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [operatingDays, setOperatingDays] = useState<Weekday[]>([]);
+  const [scheduleInputs, setScheduleInputs] = useState<Record<string, string>>({});
+  const [originalSchedule, setOriginalSchedule] = useState<Record<string, number>>({});
+  const [settingsLoading, setSettingsLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [settingsRes, schedRes] = await Promise.all([
+          fetch(`${API_URL}/bakery/settings`, { credentials: 'include' }),
+          state.mode === 'edit'
+            ? fetch(`${API_URL}/production-schedule`, { credentials: 'include' })
+            : Promise.resolve(null),
+        ]);
+
+        const settingsData: { operatingDays: Weekday[] } = settingsRes.ok
+          ? await settingsRes.json()
+          : { operatingDays: [] };
+        setOperatingDays(settingsData.operatingDays);
+
+        if (state.mode === 'edit' && schedRes?.ok) {
+          const schedData: { itemId: number; weekday: string; quantity: number }[] = await schedRes.json();
+          const orig: Record<string, number> = {};
+          for (const entry of schedData) {
+            if (entry.itemId === state.item.id) orig[entry.weekday] = entry.quantity;
+          }
+          setOriginalSchedule(orig);
+          const inputs: Record<string, string> = {};
+          for (const [day, qty] of Object.entries(orig)) inputs[day] = String(qty);
+          setScheduleInputs(inputs);
+        }
+      } catch {
+        // silently fail — schedule section will just not appear
+      } finally {
+        setSettingsLoading(false);
+      }
+    };
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const parsedPar = parInput.trim() === '' ? null : parseInt(parInput, 10);
   const parValid = parInput.trim() === '' || (!isNaN(parsedPar!) && parsedPar! >= 0);
   const parsedDefaultBatchQty = defaultBatchQtyInput.trim() === '' ? null : parseInt(defaultBatchQtyInput, 10);
@@ -54,12 +152,25 @@ function ItemSheet({
     if (!parValid) { setError('Par must be a whole number (0 or more)'); return; }
     if (!defaultBatchQtyValid) { setError('Default batch qty must be a whole number (1 or more)'); return; }
 
+    for (const day of operatingDays) {
+      const val = (scheduleInputs[day] ?? '').trim();
+      if (val !== '') {
+        const n = parseInt(val, 10);
+        if (isNaN(n) || n < 0) {
+          setError(`Bakeoff qty for ${day} must be a whole number (0 or more)`);
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = { name: name.trim() };
-      if (parsedPar !== null) body.par = parsedPar;
-      if (parsedDefaultBatchQty !== null) body.defaultBatchQty = parsedDefaultBatchQty;
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        par: parsedPar,
+        defaultBatchQty: parsedDefaultBatchQty,
+      };
 
       let res: Response;
       if (state.mode === 'add') {
@@ -84,6 +195,35 @@ function ItemSheet({
       }
 
       const saved: Item = await res.json();
+
+      // Persist bakeoff schedule
+      if (operatingDays.length > 0) {
+        const itemId = saved.id;
+        const scheduleOps: Promise<void>[] = [];
+        for (const day of operatingDays) {
+          const val = (scheduleInputs[day] ?? '').trim();
+          const qty = val === '' ? null : parseInt(val, 10);
+          if (qty !== null && !isNaN(qty)) {
+            scheduleOps.push(
+              fetch(`${API_URL}/production-schedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ itemId, weekday: day, quantity: qty }),
+              }).then(() => {}),
+            );
+          } else if (qty === null && originalSchedule[day] !== undefined) {
+            scheduleOps.push(
+              fetch(`${API_URL}/production-schedule/${itemId}/${day}`, {
+                method: 'DELETE',
+                credentials: 'include',
+              }).then(() => {}),
+            );
+          }
+        }
+        await Promise.all(scheduleOps);
+      }
+
       onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -112,7 +252,7 @@ function ItemSheet({
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative bg-card rounded-t-[16px] px-6 pt-6 pb-10 z-10 max-w-[430px] w-full mx-auto">
+      <div className="relative bg-card rounded-t-[16px] px-6 pt-6 pb-10 z-10 max-w-[630px] w-full mx-auto">
         <div className="w-9 h-1 bg-border rounded-full mx-auto mb-5" />
 
         <h2 className="text-xl font-semibold text-foreground mb-6">
@@ -138,38 +278,41 @@ function ItemSheet({
           />
         </div>
 
-        {/* Par */}
-        <div className="mb-4">
-          <label htmlFor={parId} className="block text-sm font-medium text-foreground mb-1.5">
-            Par level <span className="text-muted-foreground font-normal">(optional)</span>
-          </label>
-          <input
-            id={parId}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={parInput}
-            onChange={e => setParInput(e.target.value)}
-            placeholder="Minimum desired frozen stock"
-            className="w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
+        {/* Bakeoff qty by day */}
+        {!settingsLoading && operatingDays.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm font-medium text-foreground mb-2">
+              Bakeoff qty by day <span className="text-muted-foreground font-normal">(optional)</span>
+            </p>
+            <div className="flex gap-2">
+              {operatingDays.map(day => (
+                <div key={day} className="flex flex-col items-center gap-1">
+                  <span className="text-xs text-muted-foreground">{day.slice(0, 3)}</span>
+                  <NumericField
+                    value={scheduleInputs[day] ?? ''}
+                    onChange={val => setScheduleInputs(prev => ({ ...prev, [day]: val }))}
+                    min={0}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-        {/* Default batch qty */}
-        <div className="mb-7">
-          <label htmlFor={defaultBatchQtyId} className="block text-sm font-medium text-foreground mb-1.5">
-            Default batch qty <span className="text-muted-foreground font-normal">(optional)</span>
-          </label>
-          <input
-            id={defaultBatchQtyId}
-            type="number"
-            inputMode="numeric"
-            min={1}
-            value={defaultBatchQtyInput}
-            onChange={e => setDefaultBatchQtyInput(e.target.value)}
-            placeholder="How many per batch run"
-            className="w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+        {/* Par + Default batch qty */}
+        <div className="flex gap-6 mb-7">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={parId} className="text-sm font-medium text-foreground">
+              Par level <span className="text-muted-foreground font-normal">(optional)</span>
+            </label>
+            <NumericField id={parId} value={parInput} onChange={setParInput} min={0} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={defaultBatchQtyId} className="text-sm font-medium text-foreground">
+              Default batch qty <span className="text-muted-foreground font-normal">(optional)</span>
+            </label>
+            <NumericField id={defaultBatchQtyId} value={defaultBatchQtyInput} onChange={setDefaultBatchQtyInput} min={1} />
+          </div>
         </div>
 
         {/* Save / Cancel */}

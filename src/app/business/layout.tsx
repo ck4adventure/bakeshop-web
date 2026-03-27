@@ -88,7 +88,7 @@ export default function BusinessLayout() {
       </aside>
 
       {/* ── Main scroll container — below header, beside sidebar ── */}
-      <main className="fixed top-14 left-0 right-0 bottom-0 overflow-y-auto pb-16 md:pb-0 landscape:pb-0 md:left-56 landscape:left-56">
+      <main className="fixed top-14 left-0 right-0 bottom-0 overflow-y-auto pb-16 md:pb-0 landscape:pb-0 md:left-56 landscape:left-56 z-[35]">
         <div className="max-w-[430px] mx-auto md:max-w-none md:mx-0 landscape:max-w-none landscape:mx-0">
           <Outlet />
         </div>
