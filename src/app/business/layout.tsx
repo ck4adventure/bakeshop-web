@@ -95,7 +95,7 @@ export default function BusinessLayout() {
       </main>
 
       {/* ── Bottom nav — mobile portrait only ── */}
-      <nav className="flex md:hidden landscape:hidden fixed bottom-0 left-0 w-full h-16 bg-card border-t border-border z-30">
+      <nav className="flex md:hidden landscape:hidden fixed bottom-0 left-0 w-full h-16 bg-card border-t border-border z-40">
         {tabs.map(tab => (
           <NavLink
             key={tab.path}
