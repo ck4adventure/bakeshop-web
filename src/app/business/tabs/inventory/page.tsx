@@ -4,11 +4,13 @@ const API_URL = import.meta.env.VITE_API_URL as string;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type Category = { id: number; name: string };
+
 type InventoryItem = {
   id: number;
   itemId: number;
   quantity: number;
-  item: { name: string; slug: string; par: number | null; defaultBatchQty: number | null };
+  item: { name: string; slug: string; par: number | null; defaultBatchQty: number | null; category: Category | null };
 };
 
 type ScheduleEntry = {
@@ -319,6 +321,7 @@ const FILTERS: { val: Filter; label: string }[] = [
 
 export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [nextDayQuotaMap, setNextDayQuotaMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -327,15 +330,17 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false);
 
   const [filter, setFilter] = useState<Filter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [invRes, schedRes] = await Promise.all([
+        const [invRes, schedRes, catsRes] = await Promise.all([
           fetch(`${API_URL}/inventory`, { credentials: 'include' }),
           fetch(`${API_URL}/production-schedule`, { credentials: 'include' }),
+          fetch(`${API_URL}/categories`, { credentials: 'include' }),
         ]);
         if (!invRes.ok) throw new Error('Failed to load inventory');
         if (!schedRes.ok) throw new Error('Failed to load schedule');
@@ -346,6 +351,7 @@ export default function InventoryPage() {
         ]);
 
         setInventory(invData);
+        setCategories(catsRes.ok ? await catsRes.json() : []);
 
         const tomorrow = getTomorrowWeekday();
         const quotaMap: Record<number, number> = {};
@@ -424,8 +430,13 @@ export default function InventoryPage() {
     return s === 'critical' || s === 'zero';
   }).length;
 
+  const categoriesWithItems = categories.filter(cat =>
+    inventory.some(i => i.item.category?.id === cat.id)
+  );
+
   const displayed = [...inventory]
     .filter(i => filter === 'all' || getItemStatus(i) === filter)
+    .filter(i => categoryFilter === null || i.item.category?.id === categoryFilter)
     .sort((a, b) => STATUS_ORDER[getItemStatus(a)] - STATUS_ORDER[getItemStatus(b)]);
 
   return (
@@ -439,13 +450,13 @@ export default function InventoryPage() {
             : 'All items looking good'}
         </p>
 
-        {/* Filter pills */}
-        <div className="flex gap-2 mt-3">
+        {/* Filter row: status pills + category chips */}
+        <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-none">
           {FILTERS.map(({ val, label }) => (
             <button
               key={val}
               onClick={() => setFilter(val)}
-              className={`px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
                 filter === val
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-transparent text-muted-foreground border-border'
@@ -454,6 +465,35 @@ export default function InventoryPage() {
               {label}
             </button>
           ))}
+
+          {categoriesWithItems.length > 0 && (
+            <>
+              <div className="w-0.5 bg-foreground/20 shrink-0 my-0.5 rounded-full" />
+              <button
+                onClick={() => setCategoryFilter(null)}
+                className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
+                  categoryFilter === null
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-transparent text-muted-foreground border-border'
+                }`}
+              >
+                All
+              </button>
+              {categoriesWithItems.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
+                    categoryFilter === cat.id
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-transparent text-muted-foreground border-border'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       </header>
 

@@ -4,11 +4,13 @@ const API_URL = import.meta.env.VITE_API_URL as string;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type Category = { id: number; name: string };
+
 type InventoryRecord = {
   id: number;
   itemId: number;
   quantity: number;
-  item: { name: string; slug: string; par: number | null };
+  item: { name: string; slug: string; par: number | null; category: Category | null };
 };
 
 type ScheduleEntry = {
@@ -282,6 +284,9 @@ export default function TodayPage() {
 
   const [bakeList, setBakeList] = useState<{ entry: ScheduleEntry; stock: number }[]>([]);
   const [attentionItems, setAttentionItems] = useState<InventoryRecord[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  // itemId → category (built from inventory response)
+  const [itemCategoryMap, setItemCategoryMap] = useState<Record<number, Category | null>>({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -289,14 +294,16 @@ export default function TodayPage() {
   const [bakedToday, setBakedToday] = useState<Record<number, number>>({});
   const [selectedBake, setSelectedBake] = useState<{ entry: ScheduleEntry; stock: number } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [invRes, schedRes] = await Promise.all([
+        const [invRes, schedRes, catsRes] = await Promise.all([
           fetch(`${API_URL}/inventory`, { credentials: 'include' }),
           fetch(`${API_URL}/production-schedule`, { credentials: 'include' }),
+          fetch(`${API_URL}/categories`, { credentials: 'include' }),
         ]);
         if (!invRes.ok) throw new Error('Failed to load inventory');
         if (!schedRes.ok) throw new Error('Failed to load schedule');
@@ -313,6 +320,8 @@ export default function TodayPage() {
           overridesRes.ok ? overridesRes.json() : Promise.resolve([]),
         ]);
 
+        setCategories(catsRes.ok ? await catsRes.json() : []);
+
         const today = getTodayWeekday();
         const todayEntries = schedData.filter(e => e.weekday === today);
 
@@ -327,7 +336,12 @@ export default function TodayPage() {
         }
 
         const invMap: Record<number, number> = {};
-        for (const rec of invData) invMap[rec.itemId] = rec.quantity;
+        const catMap: Record<number, Category | null> = {};
+        for (const rec of invData) {
+          invMap[rec.itemId] = rec.quantity;
+          catMap[rec.itemId] = rec.item.category;
+        }
+        setItemCategoryMap(catMap);
 
         const bakes = todayEntries.map(entry => ({
           entry,
@@ -410,7 +424,21 @@ export default function TodayPage() {
     setTimeout(() => setToast(null), 2800);
   };
 
-  const stillNeeded = bakeList.filter(b => !(b.entry.itemId in bakedToday)).length;
+  // Categories that have at least one item in today's bake list or attention list
+  const categoriesWithItems = categories.filter(cat =>
+    bakeList.some(b => itemCategoryMap[b.entry.itemId]?.id === cat.id) ||
+    attentionItems.some(a => a.item.category?.id === cat.id)
+  );
+
+  const filteredBakeList = categoryFilter === null
+    ? bakeList
+    : bakeList.filter(b => itemCategoryMap[b.entry.itemId]?.id === categoryFilter);
+
+  const filteredAttentionItems = categoryFilter === null
+    ? attentionItems
+    : attentionItems.filter(a => a.item.category?.id === categoryFilter);
+
+  const stillNeeded = filteredBakeList.filter(b => !(b.entry.itemId in bakedToday)).length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -418,6 +446,36 @@ export default function TodayPage() {
       <header className="sticky top-0 z-10 bg-card border-b border-border px-4 pt-5 pb-3">
         <h1 className="text-[22px] font-bold text-foreground">{getGreeting()}</h1>
         <p className="text-[13px] text-muted-foreground mt-0.5">{formatDate()}</p>
+
+        {/* Category filter chips */}
+        {!loading && !fetchError && categoriesWithItems.length > 0 && (
+          <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setCategoryFilter(null)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
+                categoryFilter === null
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-transparent text-muted-foreground border-border'
+              }`}
+            >
+              All
+            </button>
+            {categoriesWithItems.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setCategoryFilter(cat.id)}
+                className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
+                  categoryFilter === cat.id
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-transparent text-muted-foreground border-border'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        )}
+
       </header>
 
       <main className="px-4 pt-4 pb-24 flex flex-col gap-5">
@@ -451,9 +509,13 @@ export default function TodayPage() {
                 <p className="text-muted-foreground text-sm py-4 text-center">
                   Nothing scheduled for today — set quotas in the Schedule tab.
                 </p>
+              ) : filteredBakeList.length === 0 ? (
+                <p className="text-muted-foreground text-sm py-4 text-center">
+                  Nothing in this category today.
+                </p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {bakeList.map(({ entry, stock }) => (
+                  {filteredBakeList.map(({ entry, stock }) => (
                     <BakeCard
                       key={entry.itemId}
                       entry={entry}
@@ -467,13 +529,13 @@ export default function TodayPage() {
             </section>
 
             {/* Needs attention */}
-            {attentionItems.length > 0 && (
+            {filteredAttentionItems.length > 0 && (
               <section>
                 <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                   Out of Stock
                 </h2>
                 <div className="flex flex-col gap-2">
-                  {attentionItems.map(record => (
+                  {filteredAttentionItems.map(record => (
                     <AttentionCard key={record.id} record={record} />
                   ))}
                 </div>
