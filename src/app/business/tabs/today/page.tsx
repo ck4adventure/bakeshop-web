@@ -66,11 +66,13 @@ function BakeCard({
   stock,
   bakedQty,
   onClick,
+  onUndo,
 }: {
   entry: ScheduleEntry;
   stock: number;
   bakedQty: number | null;
   onClick: () => void;
+  onUndo: () => void;
 }) {
   const quota = entry.quantity;
   const isBaked = bakedQty !== null;
@@ -90,15 +92,21 @@ function BakeCard({
         style={{ background: accentColor }}
       />
 
-      <div className="pl-2">
+      {/* Content dims when baked */}
+      <div className={`pl-2 transition-opacity duration-300 ${isBaked ? 'opacity-50' : ''}`}>
         {/* Top row */}
         <div className="flex justify-between items-start">
-          <div>
+          <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-[17px] font-medium text-foreground leading-snug">
               {entry.item.name}
             </span>
+            {isBaked && (
+              <span className="text-[13px] font-medium" style={{ color: DONE_COLOR }}>
+                Baked ✓
+              </span>
+            )}
             {entry.isOverridden && (
-              <span className="ml-2 text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
+              <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
                 style={{ background: 'var(--status-below-par-bg)', color: 'var(--status-below-par-text)' }}>
                 override
               </span>
@@ -127,11 +135,7 @@ function BakeCard({
           <span className="text-[13px] text-muted-foreground">
             {isBaked ? `${stock} left in freezer` : `${stock} in freezer`}
           </span>
-          {isBaked ? (
-            <span className="text-[13px] font-medium" style={{ color: DONE_COLOR }}>
-              Baked ✓
-            </span>
-          ) : readiness === 'empty' ? (
+          {!isBaked && (readiness === 'empty' ? (
             <span className="text-[13px] font-medium" style={{ color: READINESS_COLOR.empty }}>
               Nothing in freezer
             </span>
@@ -143,9 +147,19 @@ function BakeCard({
             <span className="text-[13px] font-medium text-muted-foreground">
               Tap to confirm →
             </span>
-          )}
+          ))}
         </div>
       </div>
+
+      {/* Undo button — full opacity, outside the dimmed wrapper */}
+      {isBaked && (
+        <button
+          onClick={onUndo}
+          className="absolute bottom-3 right-4 text-[12px] font-medium text-muted-foreground underline underline-offset-2 cursor-pointer"
+        >
+          Undo
+        </button>
+      )}
     </div>
   );
 
@@ -290,8 +304,8 @@ export default function TodayPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // itemId → quantity actually baked today (session state)
-  const [bakedToday, setBakedToday] = useState<Record<number, number>>({});
+  // itemId → { qty, transactionId } for confirmed bakes this session
+  const [bakedToday, setBakedToday] = useState<Record<number, { qty: number; transactionId: number }>>({});
   const [selectedBake, setSelectedBake] = useState<{ entry: ScheduleEntry; stock: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
@@ -398,7 +412,8 @@ export default function TodayPage() {
         throw new Error((data as { message?: string }).message ?? 'Failed to record bake');
       }
 
-      const newBakedToday = { ...bakedToday, [selectedBake.entry.itemId]: quantity };
+      const transaction: { id: number } = await res.json();
+      const newBakedToday = { ...bakedToday, [selectedBake.entry.itemId]: { qty: quantity, transactionId: transaction.id } };
       setBakedToday(newBakedToday);
 
       // Deduct from local stock
@@ -416,6 +431,33 @@ export default function TodayPage() {
       showToast(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUndoBake = async (itemId: number) => {
+    const baked = bakedToday[itemId];
+    if (!baked) return;
+    try {
+      const res = await fetch(`${API_URL}/inventory/bake/${baked.transactionId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to undo bake');
+
+      const newBakedToday = { ...bakedToday };
+      delete newBakedToday[itemId];
+      setBakedToday(newBakedToday);
+
+      // Restore stock locally
+      const updatedList = bakeList.map(b =>
+        b.entry.itemId === itemId ? { ...b, stock: b.stock + baked.qty } : b
+      );
+      sortBakeList(updatedList, newBakedToday);
+      setBakeList(updatedList);
+
+      showToast('Bake undone');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Something went wrong');
     }
   };
 
@@ -438,7 +480,7 @@ export default function TodayPage() {
     ? attentionItems
     : attentionItems.filter(a => a.item.category?.id === categoryFilter);
 
-  const stillNeeded = filteredBakeList.filter(b => !(b.entry.itemId in bakedToday)).length;
+  const stillNeeded = filteredBakeList.filter(b => !(b.entry.itemId in bakedToday) && b.stock > 0).length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -520,8 +562,9 @@ export default function TodayPage() {
                       key={entry.itemId}
                       entry={entry}
                       stock={stock}
-                      bakedQty={bakedToday[entry.itemId] ?? null}
+                      bakedQty={bakedToday[entry.itemId]?.qty ?? null}
                       onClick={() => setSelectedBake({ entry, stock })}
+                      onUndo={() => handleUndoBake(entry.itemId)}
                     />
                   ))}
                 </div>
