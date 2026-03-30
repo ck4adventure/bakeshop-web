@@ -6,12 +6,18 @@ const API_URL = import.meta.env.VITE_API_URL as string;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type Category = {
+  id: number;
+  name: string;
+};
+
 type Item = {
   id: number;
   name: string;
   slug: string;
   par: number | null;
   defaultBatchQty: number | null;
+  category: Category | null;
 };
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
@@ -80,23 +86,33 @@ type SheetState =
 
 function ItemSheet({
   state,
+  categories,
   onClose,
   onSaved,
   onDeleted,
+  onCategoryCreated,
 }: {
   state: SheetState;
+  categories: Category[];
   onClose: () => void;
   onSaved: (item: Item) => void;
   onDeleted?: (id: number) => void;
+  onCategoryCreated: (cat: Category) => void;
 }) {
   const nameId = useId();
   const parId = useId();
   const defaultBatchQtyId = useId();
+  const categoryId = useId();
+  const newCategoryId = useId();
 
   const initial = state.mode === 'edit' ? state.item : null;
   const [name, setName] = useState(initial?.name ?? '');
   const [parInput, setParInput] = useState(initial?.par != null ? String(initial.par) : '');
   const [defaultBatchQtyInput, setDefaultBatchQtyInput] = useState(initial?.defaultBatchQty != null ? String(initial.defaultBatchQty) : '');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
+    initial?.category?.id != null ? String(initial.category.id) : ''
+  );
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -147,10 +163,13 @@ function ItemSheet({
   const parsedDefaultBatchQty = defaultBatchQtyInput.trim() === '' ? null : parseInt(defaultBatchQtyInput, 10);
   const defaultBatchQtyValid = defaultBatchQtyInput.trim() === '' || (!isNaN(parsedDefaultBatchQty!) && parsedDefaultBatchQty! >= 1);
 
+  const isAddingNew = selectedCategoryId === '__new__';
+
   const handleSave = async () => {
     if (!name.trim()) { setError('Name is required'); return; }
     if (!parValid) { setError('Par must be a whole number (0 or more)'); return; }
     if (!defaultBatchQtyValid) { setError('Default batch qty must be a whole number (1 or more)'); return; }
+    if (isAddingNew && !newCategoryName.trim()) { setError('Enter a name for the new category'); return; }
 
     for (const day of operatingDays) {
       const val = (scheduleInputs[day] ?? '').trim();
@@ -166,10 +185,31 @@ function ItemSheet({
     setSaving(true);
     setError(null);
     try {
+      // If adding a new category, create it first
+      let resolvedCategoryId: number | null = null;
+      if (isAddingNew) {
+        const catRes = await fetch(`${API_URL}/categories`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ name: newCategoryName.trim() }),
+        });
+        if (!catRes.ok) {
+          const data = await catRes.json().catch(() => ({}));
+          throw new Error((data as { message?: string }).message ?? 'Failed to create category');
+        }
+        const newCat: Category = await catRes.json();
+        onCategoryCreated(newCat);
+        resolvedCategoryId = newCat.id;
+      } else if (selectedCategoryId !== '') {
+        resolvedCategoryId = parseInt(selectedCategoryId, 10);
+      }
+
       const body: Record<string, unknown> = {
         name: name.trim(),
         par: parsedPar,
         defaultBatchQty: parsedDefaultBatchQty,
+        categoryId: resolvedCategoryId,
       };
 
       let res: Response;
@@ -278,6 +318,36 @@ function ItemSheet({
           />
         </div>
 
+        {/* Category */}
+        <div className="mb-4">
+          <label htmlFor={categoryId} className="block text-sm font-medium text-foreground mb-1.5">
+            Category <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
+          <select
+            id={categoryId}
+            value={selectedCategoryId}
+            onChange={e => setSelectedCategoryId(e.target.value)}
+            className="w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">No category</option>
+            {categories.map(cat => (
+              <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
+            ))}
+            <option value="__new__">+ Add new category</option>
+          </select>
+          {isAddingNew && (
+            <input
+              id={newCategoryId}
+              type="text"
+              value={newCategoryName}
+              onChange={e => setNewCategoryName(e.target.value)}
+              placeholder="New category name"
+              className="mt-2 w-full h-12 rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              autoFocus
+            />
+          )}
+        </div>
+
         {/* Bakeoff qty by day */}
         {!settingsLoading && operatingDays.length > 0 && (
           <div className="mb-4">
@@ -377,24 +447,31 @@ export default function ItemsPage() {
   const navigate = useNavigate();
 
   const [items, setItems] = useState<Item[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchItems = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`${API_URL}/items`, { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to load items');
-        setItems(await res.json());
+        const [itemsRes, catsRes] = await Promise.all([
+          fetch(`${API_URL}/items`, { credentials: 'include' }),
+          fetch(`${API_URL}/categories`, { credentials: 'include' }),
+        ]);
+        if (!itemsRes.ok) throw new Error('Failed to load items');
+        const [itemsData, catsData] = await Promise.all([itemsRes.json(), catsRes.ok ? catsRes.json() : []]);
+        setItems(itemsData);
+        setCategories(catsData);
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : 'Something went wrong');
       } finally {
         setLoading(false);
       }
     };
-    fetchItems();
+    fetchData();
   }, []);
 
   const showToast = (msg: string) => {
@@ -421,6 +498,40 @@ export default function ItemsPage() {
     setSheet(null);
   };
 
+  const handleCategoryCreated = (cat: Category) => {
+    setCategories(prev => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
+  };
+
+  // Derive the categories that actually have items (for chip visibility)
+  const categoriesWithItems = categories.filter(cat => items.some(i => i.category?.id === cat.id));
+  const hasUncategorized = items.some(i => i.category === null);
+
+  // Build grouped list based on active filter
+  const filteredItems = activeFilter !== null
+    ? items.filter(i => i.category?.id === activeFilter)
+    : items;
+
+  // Group by category: categorized groups sorted by category name, then uncategorized at end
+  const groupedItems: { label: string; items: Item[] }[] = [];
+  const seen = new Set<number>();
+
+  for (const cat of categories) {
+    const group = filteredItems.filter(i => i.category?.id === cat.id);
+    if (group.length > 0) {
+      groupedItems.push({ label: cat.name, items: group });
+      seen.add(cat.id);
+    }
+  }
+
+  if (activeFilter === null) {
+    const uncategorized = filteredItems.filter(i => i.category === null);
+    if (uncategorized.length > 0) {
+      groupedItems.push({ label: 'Uncategorized', items: uncategorized });
+    }
+  }
+
+  const showChips = !loading && !fetchError && (categoriesWithItems.length > 0 || hasUncategorized);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -442,6 +553,35 @@ export default function ItemsPage() {
         </div>
       </header>
 
+      {/* Filter chips */}
+      {showChips && (
+        <div className="px-4 pt-3 pb-1 flex gap-2 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setActiveFilter(null)}
+            className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+              activeFilter === null
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-transparent text-foreground border-border hover:bg-muted'
+            }`}
+          >
+            All
+          </button>
+          {categoriesWithItems.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveFilter(cat.id)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+                activeFilter === cat.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-transparent text-foreground border-border hover:bg-muted'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* List */}
       <main className="px-4 pt-3 pb-28 flex flex-col gap-2">
         {loading && (
@@ -461,20 +601,29 @@ export default function ItemsPage() {
             </button>
           </div>
         )}
-        {items.map(item => (
-          <button
-            key={item.id}
-            onClick={() => setSheet({ mode: 'edit', item })}
-            className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
-          >
-            <span className="text-[17px] font-medium text-foreground">{item.name}</span>
-            <div className="text-right shrink-0 ml-4">
-              <div className="text-sm text-muted-foreground">{item.par != null ? `par ${item.par}` : 'no par'}</div>
-              {item.defaultBatchQty != null && (
-                <div className="text-xs text-muted-foreground/70">batch {item.defaultBatchQty}</div>
-              )}
+        {!loading && !fetchError && items.length > 0 && groupedItems.map(group => (
+          <div key={group.label}>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1 mb-1.5 mt-2 first:mt-0">
+              {group.label}
+            </h3>
+            <div className="flex flex-col gap-2">
+              {group.items.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => setSheet({ mode: 'edit', item })}
+                  className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
+                >
+                  <span className="text-[17px] font-medium text-foreground">{item.name}</span>
+                  <div className="text-right shrink-0 ml-4">
+                    <div className="text-sm text-muted-foreground">{item.par != null ? `par ${item.par}` : 'no par'}</div>
+                    {item.defaultBatchQty != null && (
+                      <div className="text-xs text-muted-foreground/70">batch {item.defaultBatchQty}</div>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
-          </button>
+          </div>
         ))}
       </main>
 
@@ -491,9 +640,11 @@ export default function ItemsPage() {
       {sheet && (
         <ItemSheet
           state={sheet}
+          categories={categories}
           onClose={() => setSheet(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
+          onCategoryCreated={handleCategoryCreated}
         />
       )}
 

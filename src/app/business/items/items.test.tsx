@@ -5,7 +5,7 @@ import '@testing-library/jest-dom'
 import ItemsPage from './page'
 
 const mockItems = [
-  { id: 1, name: 'Croissant', slug: 'croissant', par: 10, defaultBatchQty: 12 },
+  { id: 1, name: 'Croissant', slug: 'croissant', par: 10, defaultBatchQty: 12, category: null },
 ]
 
 vi.mock('react-router', async (importOriginal) => {
@@ -21,6 +21,15 @@ describe('ItemsPage — clearing optional fields', () => {
       if (options?.method === 'PATCH') {
         const body = JSON.parse(options.body as string)
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...mockItems[0], ...body }) })
+      }
+      if (typeof url === 'string' && url.includes('/categories')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+      }
+      if (typeof url === 'string' && url.includes('/bakery/settings')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ operatingDays: [] }) })
+      }
+      if (typeof url === 'string' && url.includes('/production-schedule')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(mockItems) })
     })

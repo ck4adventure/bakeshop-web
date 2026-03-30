@@ -148,10 +148,12 @@ function ItemModal({
   const [mode, setMode] = useState<ModalMode>('batch');
 
   // Batch state
-  const [batchCount, setBatchCount] = useState(item.item.defaultBatchQty ?? 1);
+  const [batchInput, setBatchInput] = useState(String(item.item.defaultBatchQty ?? 1));
+  const batchCount = Math.max(1, parseInt(batchInput, 10) || 1);
 
   // Adjust state — quantity signed (+/-), note required
-  const [adjDelta, setAdjDelta] = useState(0);
+  const [adjInput, setAdjInput] = useState('0');
+  const adjDelta = parseInt(adjInput, 10) || 0;
   const [adjNote, setAdjNote] = useState('');
   const newStock = item.quantity + adjDelta;
   const adjValid = adjDelta !== 0 && adjNote.trim().length > 0 && newStock >= 0;
@@ -188,18 +190,32 @@ function ItemModal({
         {mode === 'batch' ? (
           <>
             <div className="flex items-center justify-center gap-6 mb-7">
-              <button onClick={() => setBatchCount(c => Math.max(1, c - 1))} aria-label="Decrease quantity"
-                className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer">
+              <button
+                onClick={() => setBatchInput(String(Math.max(1, batchCount - 1)))}
+                aria-label="Decrease quantity"
+                className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer shrink-0"
+              >
                 −
               </button>
-              <div className="text-center w-20">
-                <div className="text-5xl font-bold text-foreground leading-none">{batchCount}</div>
+              <div className="text-center w-24">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={batchInput}
+                  onChange={e => setBatchInput(e.target.value)}
+                  onBlur={() => setBatchInput(String(batchCount))}
+                  className="w-full text-5xl font-bold text-foreground text-center bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
                 {item.item.defaultBatchQty !== null && (
                   <div className="text-[13px] text-muted-foreground mt-1">default: {item.item.defaultBatchQty}</div>
                 )}
               </div>
-              <button onClick={() => setBatchCount(c => c + 1)} aria-label="Increase quantity"
-                className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer">
+              <button
+                onClick={() => setBatchInput(String(batchCount + 1))}
+                aria-label="Increase quantity"
+                className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer shrink-0"
+              >
                 +
               </button>
             </div>
@@ -227,18 +243,31 @@ function ItemModal({
 
             {/* Signed quantity stepper */}
             <div className="flex items-center justify-center gap-6 mb-5">
-              <button onClick={() => setAdjDelta(d => d - 1)} aria-label="Decrease"
-                className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer">
+              <button
+                onClick={() => setAdjInput(String(adjDelta - 1))}
+                aria-label="Decrease"
+                className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer shrink-0"
+              >
                 −
               </button>
               <div className="text-center w-24">
-                <div className={`text-5xl font-bold leading-none ${adjDelta > 0 ? 'text-foreground' : adjDelta < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {adjDelta > 0 ? `+${adjDelta}` : adjDelta}
-                </div>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={adjInput}
+                  onChange={e => setAdjInput(e.target.value)}
+                  onBlur={() => setAdjInput(String(adjDelta))}
+                  className={`w-full text-5xl font-bold text-center bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                    adjDelta > 0 ? 'text-foreground' : adjDelta < 0 ? 'text-destructive' : 'text-muted-foreground'
+                  }`}
+                />
                 <div className="text-[13px] text-muted-foreground mt-1">change</div>
               </div>
-              <button onClick={() => setAdjDelta(d => d + 1)} aria-label="Increase"
-                className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer">
+              <button
+                onClick={() => setAdjInput(String(adjDelta + 1))}
+                aria-label="Increase"
+                className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer shrink-0"
+              >
                 +
               </button>
             </div>
