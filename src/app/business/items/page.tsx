@@ -1,6 +1,7 @@
 import { useState, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Plus } from 'lucide-react';
+import { ModalShell } from '@/components/modal-shell';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
@@ -289,12 +290,7 @@ function ItemSheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-
-      <div className="relative bg-card rounded-t-[16px] px-6 pt-6 pb-10 z-10 max-w-[630px] w-full mx-auto">
-        <div className="w-9 h-1 bg-border rounded-full mx-auto mb-5" />
-
+    <ModalShell onClose={onClose} maxWidth="max-w-[630px]">
         <h2 className="text-xl font-semibold text-foreground mb-6">
           {state.mode === 'add' ? 'New Item' : 'Edit Item'}
         </h2>
@@ -436,8 +432,7 @@ function ItemSheet({
             )}
           </div>
         )}
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
