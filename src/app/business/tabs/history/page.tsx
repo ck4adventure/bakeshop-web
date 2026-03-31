@@ -14,6 +14,11 @@ type HistoryEntry = {
   product: { name: string; slug: string };
 };
 
+type InventoryRecord = {
+  itemId: number;
+  quantity: number;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTime(iso: string): string {
@@ -56,29 +61,40 @@ function groupByDay(entries: HistoryEntry[]): { label: string; items: HistoryEnt
 
 export default function HistoryPage() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const [invMap, setInvMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const [batchesRes, adjustmentsRes] = await Promise.all([
+        const [batchesRes, adjustmentsRes, invRes] = await Promise.all([
           fetch(`${API_URL}/batches`, { credentials: 'include' }),
           fetch(`${API_URL}/inventory/adjustments`, { credentials: 'include' }),
+          fetch(`${API_URL}/inventory`, { credentials: 'include' }),
         ]);
         if (!batchesRes.ok) throw new Error('Failed to load history');
 
-        const [batches, adjustments] = await Promise.all([
+        const [batches, adjustments, invData]: [
+          Omit<HistoryEntry, 'type'>[],
+          Omit<HistoryEntry, 'type'>[],
+          InventoryRecord[],
+        ] = await Promise.all([
           batchesRes.json(),
-          adjustmentsRes.ok ? adjustmentsRes.json() : [],
+          adjustmentsRes.ok ? adjustmentsRes.json() : Promise.resolve([]),
+          invRes.ok ? invRes.json() : Promise.resolve([]),
         ]);
 
         const merged: HistoryEntry[] = [
-          ...batches.map((b: Omit<HistoryEntry, 'type'>) => ({ ...b, type: 'batch' as const })),
-          ...adjustments.map((a: Omit<HistoryEntry, 'type'>) => ({ ...a, type: 'adjustment' as const })),
+          ...batches.map(b => ({ ...b, type: 'batch' as const })),
+          ...adjustments.map(a => ({ ...a, type: 'adjustment' as const })),
         ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         setEntries(merged);
+
+        const map: Record<number, number> = {};
+        for (const rec of invData) map[rec.itemId] = rec.quantity;
+        setInvMap(map);
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : 'Something went wrong');
       } finally {
@@ -142,6 +158,9 @@ export default function HistoryPage() {
                               Adjustment
                             </span>
                           )}
+                        </div>
+                        <div className="text-[13px] text-muted-foreground mt-0.5">
+                          {invMap[entry.itemId] ?? 0} in freezer
                         </div>
                         {entry.note && (
                           <div className="text-[13px] text-muted-foreground mt-0.5">

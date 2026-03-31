@@ -13,6 +13,12 @@ type InventoryRecord = {
   item: { name: string; slug: string; par: number | null; category: Category | null };
 };
 
+type BakeTransaction = {
+  id: number;
+  itemId: number;
+  quantity: number; // stored as negative
+};
+
 type ScheduleEntry = {
   itemId: number;
   weekday: string;
@@ -314,24 +320,22 @@ export default function TodayPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [invRes, schedRes, catsRes] = await Promise.all([
+        const todayDateStr = new Date().toISOString().split('T')[0];
+        const [invRes, schedRes, catsRes, todayBakesRes, overridesRes] = await Promise.all([
           fetch(`${API_URL}/inventory`, { credentials: 'include' }),
           fetch(`${API_URL}/production-schedule`, { credentials: 'include' }),
           fetch(`${API_URL}/categories`, { credentials: 'include' }),
+          fetch(`${API_URL}/inventory/bakes/today`, { credentials: 'include' }),
+          fetch(`${API_URL}/production-schedule/overrides?date=${todayDateStr}`, { credentials: 'include' }),
         ]);
         if (!invRes.ok) throw new Error('Failed to load inventory');
         if (!schedRes.ok) throw new Error('Failed to load schedule');
 
-        const todayDateStr = new Date().toISOString().split('T')[0];
-        const overridesRes = await fetch(
-          `${API_URL}/production-schedule/overrides?date=${todayDateStr}`,
-          { credentials: 'include' },
-        );
-
-        const [invData, schedData, overridesData]: [InventoryRecord[], ScheduleEntry[], { itemId: number; quantity: number }[]] = await Promise.all([
+        const [invData, schedData, overridesData, todayBakesData]: [InventoryRecord[], ScheduleEntry[], { itemId: number; quantity: number }[], BakeTransaction[]] = await Promise.all([
           invRes.json(),
           schedRes.json(),
           overridesRes.ok ? overridesRes.json() : Promise.resolve([]),
+          todayBakesRes.ok ? todayBakesRes.json() : Promise.resolve([]),
         ]);
 
         setCategories(catsRes.ok ? await catsRes.json() : []);
@@ -362,7 +366,13 @@ export default function TodayPage() {
           stock: invMap[entry.itemId] ?? 0,
         }));
 
-        sortBakeList(bakes, {});
+        const initialBakedToday: Record<number, { qty: number; transactionId: number }> = {};
+        for (const t of todayBakesData) {
+          initialBakedToday[t.itemId] = { qty: Math.abs(t.quantity), transactionId: t.id };
+        }
+        setBakedToday(initialBakedToday);
+
+        sortBakeList(bakes, initialBakedToday);
         setBakeList(bakes);
 
         const scheduledIds = new Set(todayEntries.map(e => e.itemId));
@@ -381,7 +391,7 @@ export default function TodayPage() {
   // Sort: unbaked empty → unbaked low → unbaked sufficient → baked
   function sortBakeList(
     list: { entry: ScheduleEntry; stock: number }[],
-    baked: Record<number, number>,
+    baked: Record<number, unknown>,
   ) {
     list.sort((a, b) => {
       const aBaked = a.entry.itemId in baked;
