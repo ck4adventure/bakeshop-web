@@ -30,7 +30,7 @@ function toDateStr(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function getUpcomingDates(): { label: string; dateStr: string; weekdayIdx: number }[] {
+function getUpcomingDates(): { label: string; dateStr: string; weekdayIdx: number; isToday: boolean }[] {
   const today = new Date();
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
@@ -39,6 +39,7 @@ function getUpcomingDates(): { label: string; dateStr: string; weekdayIdx: numbe
       label: i === 0 ? 'Today' : i === 1 ? 'Tmrw' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
       dateStr: toDateStr(d),
       weekdayIdx: d.getDay(),
+      isToday: i === 0,
     };
   });
 }
@@ -141,6 +142,7 @@ function OverrideSheet({
   dateLabel,
   templateQty,
   existingOverride,
+  locked,
   onClose,
   onSaved,
   onRemoved,
@@ -150,6 +152,7 @@ function OverrideSheet({
   dateLabel: string;
   templateQty: number | null;
   existingOverride: number | null;
+  locked: boolean;
   onClose: () => void;
   onSaved: (itemId: number, quantity: number) => void;
   onRemoved: (itemId: number) => void;
@@ -200,30 +203,33 @@ function OverrideSheet({
           Override · {dateLabel}
         </p>
         <h2 className="text-xl font-semibold text-foreground mb-1">{item.name}</h2>
+        {locked && (
+          <p className="text-[13px] text-muted-foreground mb-4">Today's schedule is locked</p>
+        )}
         {templateQty !== null && (
           <p className="text-[13px] text-muted-foreground mb-6">
             Weekly template: {templateQty}
           </p>
         )}
-        {!templateQty && <div className="mb-6" />}
+        {!templateQty && !locked && <div className="mb-6" />}
         {error && <p className="text-sm mb-4 px-3 py-2 rounded-lg bg-destructive/10 text-destructive">{error}</p>}
         <div className="flex items-center justify-center gap-6 mb-7">
-          <button onClick={() => setCount(c => Math.max(0, c - 1))} aria-label="Decrease"
-            className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer">−</button>
+          <button onClick={() => setCount(c => Math.max(0, c - 1))} aria-label="Decrease" disabled={locked}
+            className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">−</button>
           <div className="text-center w-20">
             <div className="text-5xl font-bold text-foreground leading-none">{count}</div>
             <div className="text-[13px] text-muted-foreground mt-1">to bake</div>
           </div>
-          <button onClick={() => setCount(c => c + 1)} aria-label="Increase"
-            className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center cursor-pointer">+</button>
+          <button onClick={() => setCount(c => c + 1)} aria-label="Increase" disabled={locked}
+            className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">+</button>
         </div>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 h-14 rounded-full border border-border bg-transparent text-foreground text-[15px] font-medium cursor-pointer">Cancel</button>
-          <button onClick={handleSave} disabled={saving} className="flex-[2] h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60">
+          <button onClick={handleSave} disabled={saving || locked} className="flex-[2] h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60">
             {saving ? 'Saving…' : 'Set Override'}
           </button>
         </div>
-        {existingOverride !== null && (
+        {existingOverride !== null && !locked && (
           <div className="mt-5 pt-5 border-t border-border text-center">
             <button onClick={handleRemove} disabled={removing}
               className="text-sm text-muted-foreground hover:text-destructive transition-colors cursor-pointer disabled:opacity-60">
@@ -449,9 +455,9 @@ export default function SchedulePage() {
                   <button key={d.dateStr} onClick={() => setSelectedDateIdx(origIdx)}
                     className={`flex flex-col items-center px-3 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors shrink-0 ${
                       isSelected ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border'
-                    }`}
+                    } ${d.isToday ? 'opacity-60' : ''}`}
                   >
-                    <span>{d.label}</span>
+                    <span>{d.isToday ? `🔒 ${d.label}` : d.label}</span>
                     {hasOverride && <span className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? 'bg-primary-foreground' : 'bg-primary'}`} />}
                   </button>
                 );
@@ -542,6 +548,7 @@ export default function SchedulePage() {
           dateLabel={selectedDate.label}
           templateQty={overrideDayTemplate[overrideSheet.item.id] ?? null}
           existingOverride={overrideSheet.existingOverride}
+          locked={selectedDate.isToday}
           onClose={() => setOverrideSheet(null)}
           onSaved={handleOverrideSaved}
           onRemoved={handleOverrideRemoved}
