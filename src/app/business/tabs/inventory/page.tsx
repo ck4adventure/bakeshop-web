@@ -229,11 +229,10 @@ function ItemModal({
   const adjValid = adjDelta !== 0 && adjNote.trim().length > 0 && newStock >= 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative bg-card rounded-t-[16px] px-6 pt-6 pb-10 z-10 max-w-[430px] w-full mx-auto">
-        <div className="w-9 h-1 bg-border rounded-full mx-auto mb-5" />
+      <div className="relative bg-card rounded-2xl px-6 pt-6 pb-8 z-50 max-w-[430px] w-full mx-auto shadow-xl">
 
         {/* Mode toggle */}
         <div className="flex rounded-full border border-border overflow-hidden mb-5">
