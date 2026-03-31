@@ -19,6 +19,67 @@ type ScheduleEntry = {
   quantity: number;
 };
 
+type BakerySettings = { operatingDays: string[] };
+type ScheduleLookup = Map<number, Map<string, number>>; // itemId → weekday → quota
+
+// ─── Schedule / runout helpers ────────────────────────────────────────────────
+
+function buildScheduleLookup(schedData: ScheduleEntry[]): ScheduleLookup {
+  const lookup: ScheduleLookup = new Map();
+  for (const entry of schedData) {
+    if (!lookup.has(entry.itemId)) lookup.set(entry.itemId, new Map());
+    lookup.get(entry.itemId)!.set(entry.weekday, entry.quantity);
+  }
+  return lookup;
+}
+
+function computeRunoutDate(
+  currentQty: number,
+  itemId: number,
+  scheduleLookup: ScheduleLookup,
+  operatingDays: Set<string>,
+  horizonDays = 30,
+): Date | null {
+  const itemSchedule = scheduleLookup.get(itemId);
+  if (!itemSchedule || itemSchedule.size === 0) return null;
+
+  let runningStock = currentQty;
+  const today = new Date();
+
+  for (let offset = 1; offset <= horizonDays; offset++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + offset);
+    const weekday = WEEKDAYS[date.getDay()];
+
+    if (!operatingDays.has(weekday)) continue;
+
+    const quota = itemSchedule.get(weekday) ?? 0;
+    if (quota === 0) continue;
+
+    if (runningStock < quota) {
+      date.setHours(0, 0, 0, 0);
+      return date;
+    }
+    runningStock -= quota;
+  }
+
+  return null;
+}
+
+function ordinalDay(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+function formatRunoutLabel(runoutDate: Date | null): string | null {
+  if (runoutDate === null) return null;
+  const weekday = runoutDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const month   = runoutDate.toLocaleDateString('en-US', { month: 'long' });
+  const day     = ordinalDay(runoutDate.getDate());
+  return `Out ${weekday}, ${month} ${day}`;
+}
+
 // ─── Status logic ─────────────────────────────────────────────────────────────
 
 type Status = 'good' | 'low' | 'critical' | 'zero';
@@ -81,15 +142,18 @@ function StatusBar({ quantity, par, status }: { quantity: number; par: number | 
 function ItemCard({
   item,
   nextDayQuota,
+  runoutDate,
   onClick,
 }: {
   item: InventoryItem;
   nextDayQuota: number | null;
+  runoutDate: Date | null;
   onClick: (item: InventoryItem) => void;
 }) {
   const { par } = item.item;
   const status = getStatus(item.quantity, par, nextDayQuota);
   const cfg = STATUS_CONFIG[status];
+  const runoutLabel = status !== 'zero' ? formatRunoutLabel(runoutDate) : null;
 
   return (
     <button
@@ -117,10 +181,14 @@ function ItemCard({
 
         <StatusBar quantity={item.quantity} par={par} status={status} />
 
-        {/* Bottom row: status pill + tomorrow quota */}
+        {/* Bottom row: status pill + runout label + tomorrow quota */}
         <div className="flex justify-between items-center mt-2.5">
-          {status !== 'good' && <StatusPill status={status} />}
-          {status === 'good' && <span />}
+          <div className="flex items-center gap-2">
+            {status !== 'good' && <StatusPill status={status} />}
+            {runoutLabel && (
+              <span className="text-xs text-muted-foreground">{runoutLabel}</span>
+            )}
+          </div>
           {nextDayQuota !== null && (
             <div className="text-xs text-muted-foreground">
               Tomorrow: <span className="font-semibold text-foreground">{nextDayQuota}</span>
@@ -246,7 +314,7 @@ function ItemModal({
             {/* Signed quantity stepper */}
             <div className="flex items-center justify-center gap-6 mb-5">
               <button
-                onClick={() => setAdjInput(String(adjDelta - 1))}
+                onClick={() => setAdjInput(String(Math.max(-item.quantity, adjDelta - 1)))}
                 aria-label="Decrease"
                 className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center cursor-pointer shrink-0"
               >
@@ -258,7 +326,7 @@ function ItemModal({
                   inputMode="numeric"
                   value={adjInput}
                   onChange={e => setAdjInput(e.target.value)}
-                  onBlur={() => setAdjInput(String(adjDelta))}
+                  onBlur={() => setAdjInput(String(Math.max(-item.quantity, adjDelta)))}
                   className={`w-full text-5xl font-bold text-center bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
                     adjDelta > 0 ? 'text-foreground' : adjDelta < 0 ? 'text-destructive' : 'text-muted-foreground'
                   }`}
@@ -326,6 +394,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const [runoutDateMap, setRunoutDateMap] = useState<Record<number, Date | null>>({});
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -337,18 +406,21 @@ export default function InventoryPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [invRes, schedRes, catsRes] = await Promise.all([
+        const [invRes, schedRes, catsRes, settingsRes] = await Promise.all([
           fetch(`${API_URL}/inventory`, { credentials: 'include' }),
           fetch(`${API_URL}/production-schedule`, { credentials: 'include' }),
           fetch(`${API_URL}/categories`, { credentials: 'include' }),
+          fetch(`${API_URL}/bakery/settings`, { credentials: 'include' }),
         ]);
         if (!invRes.ok) throw new Error('Failed to load inventory');
         if (!schedRes.ok) throw new Error('Failed to load schedule');
 
-        const [invData, schedData]: [InventoryItem[], ScheduleEntry[]] = await Promise.all([
-          invRes.json(),
-          schedRes.json(),
-        ]);
+        const [invData, schedData, settingsData]: [InventoryItem[], ScheduleEntry[], BakerySettings] =
+          await Promise.all([
+            invRes.json(),
+            schedRes.json(),
+            settingsRes.ok ? settingsRes.json() : Promise.resolve({ operatingDays: [] }),
+          ]);
 
         setInventory(invData);
         setCategories(catsRes.ok ? await catsRes.json() : []);
@@ -361,6 +433,19 @@ export default function InventoryPage() {
           }
         }
         setNextDayQuotaMap(quotaMap);
+
+        const scheduleLookup = buildScheduleLookup(schedData);
+        const operatingDaysSet = new Set<string>(settingsData.operatingDays);
+        const runoutMap: Record<number, Date | null> = {};
+        for (const invItem of invData) {
+          runoutMap[invItem.itemId] = computeRunoutDate(
+            invItem.quantity,
+            invItem.itemId,
+            scheduleLookup,
+            operatingDaysSet,
+          );
+        }
+        setRunoutDateMap(runoutMap);
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : 'Something went wrong');
       } finally {
@@ -515,6 +600,7 @@ export default function InventoryPage() {
             key={item.itemId}
             item={item}
             nextDayQuota={nextDayQuotaMap[item.itemId] ?? null}
+            runoutDate={runoutDateMap[item.itemId] ?? null}
             onClick={setSelectedItem}
           />
         ))}
