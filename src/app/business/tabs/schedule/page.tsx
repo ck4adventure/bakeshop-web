@@ -175,8 +175,10 @@ function DailySheet({
   onSaved: (itemId: number, quantity: number, specialOrderQty: number) => void;
   onRemoved: (itemId: number) => void;
 }) {
-  const [fohCount, setFohCount] = useState(existingEntry?.quantity ?? templateQty ?? 1);
-  const [specialCount, setSpecialCount] = useState(existingEntry?.specialOrderQty ?? 0);
+  const [fohInput, setFohInput] = useState(String(existingEntry?.quantity ?? templateQty ?? 1));
+  const [specialInput, setSpecialInput] = useState(String(existingEntry?.specialOrderQty ?? 0));
+  const fohCount = Math.max(0, parseInt(fohInput, 10) || 0);
+  const specialCount = Math.max(0, parseInt(specialInput, 10) || 0);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,26 +240,44 @@ function DailySheet({
         {/* FOH stepper */}
         <p className="text-[13px] font-semibold text-foreground mb-2 text-center">FOH</p>
         <div className="flex items-center justify-center gap-6 mb-5">
-          <button onClick={() => setFohCount(c => Math.max(0, c - 1))} aria-label="Decrease FOH" disabled={locked}
+          <button onClick={() => setFohInput(String(Math.max(0, fohCount - 1)))} aria-label="Decrease FOH" disabled={locked}
             className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">−</button>
-          <div className="text-center w-20">
-            <div className="text-5xl font-bold text-foreground leading-none">{fohCount}</div>
+          <div className="text-center w-24">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={fohInput}
+              disabled={locked}
+              onChange={e => setFohInput(e.target.value)}
+              onBlur={() => setFohInput(String(fohCount))}
+              className="w-full text-5xl font-bold text-foreground text-center bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-40"
+            />
             <div className="text-[13px] text-muted-foreground mt-1">FOH qty</div>
           </div>
-          <button onClick={() => setFohCount(c => c + 1)} aria-label="Increase FOH" disabled={locked}
+          <button onClick={() => setFohInput(String(fohCount + 1))} aria-label="Increase FOH" disabled={locked}
             className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">+</button>
         </div>
 
         {/* Special orders stepper */}
         <p className="text-[13px] font-semibold text-foreground mb-2 text-center">Special Orders</p>
         <div className="flex items-center justify-center gap-6 mb-5">
-          <button onClick={() => setSpecialCount(c => Math.max(0, c - 1))} aria-label="Decrease special orders" disabled={locked}
+          <button onClick={() => setSpecialInput(String(Math.max(0, specialCount - 1)))} aria-label="Decrease special orders" disabled={locked}
             className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">−</button>
-          <div className="text-center w-20">
-            <div className="text-5xl font-bold text-foreground leading-none">{specialCount}</div>
+          <div className="text-center w-24">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={specialInput}
+              disabled={locked}
+              onChange={e => setSpecialInput(e.target.value)}
+              onBlur={() => setSpecialInput(String(specialCount))}
+              className="w-full text-5xl font-bold text-foreground text-center bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-40"
+            />
             <div className="text-[13px] text-muted-foreground mt-1">additive</div>
           </div>
-          <button onClick={() => setSpecialCount(c => c + 1)} aria-label="Increase special orders" disabled={locked}
+          <button onClick={() => setSpecialInput(String(specialCount + 1))} aria-label="Increase special orders" disabled={locked}
             className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">+</button>
         </div>
 
