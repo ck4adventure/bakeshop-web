@@ -296,6 +296,14 @@ function AttentionCard({ record }: { record: InventoryRecord }) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+type CompletionFilter = 'all' | 'complete' | 'incomplete';
+
+const COMPLETION_FILTERS: { val: CompletionFilter; label: string }[] = [
+  { val: 'all',        label: 'All'        },
+  { val: 'complete',   label: 'Complete'   },
+  { val: 'incomplete', label: 'Incomplete' },
+];
+
 export default function TodayPage() {
 
   const [bakeList, setBakeList] = useState<{ entry: ScheduleEntry; stock: number }[]>([]);
@@ -310,6 +318,7 @@ export default function TodayPage() {
   const [bakedToday, setBakedToday] = useState<Record<number, { qty: number; transactionId: number }>>({});
   const [selectedBake, setSelectedBake] = useState<{ entry: ScheduleEntry; stock: number } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -478,9 +487,13 @@ export default function TodayPage() {
     attentionItems.some(a => a.item.category?.id === cat.id)
   );
 
-  const filteredBakeList = categoryFilter === null
-    ? bakeList
-    : bakeList.filter(b => itemCategoryMap[b.entry.itemId]?.id === categoryFilter);
+  const filteredBakeList = bakeList
+    .filter(b => {
+      if (completionFilter === 'complete') return b.entry.itemId in bakedToday;
+      if (completionFilter === 'incomplete') return !(b.entry.itemId in bakedToday);
+      return true;
+    })
+    .filter(b => categoryFilter === null || itemCategoryMap[b.entry.itemId]?.id === categoryFilter);
 
   const filteredAttentionItems = categoryFilter === null
     ? attentionItems
@@ -495,32 +508,51 @@ export default function TodayPage() {
         <h1 className="text-[22px] font-bold text-foreground">{getGreeting()}</h1>
         <p className="text-[13px] text-muted-foreground mt-0.5">{formatDate()}</p>
 
-        {/* Category filter chips */}
-        {!loading && !fetchError && categoriesWithItems.length > 0 && (
+        {/* Filter row: completion pills + category chips */}
+        {!loading && !fetchError && (
           <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-none">
-            <button
-              onClick={() => setCategoryFilter(null)}
-              className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
-                categoryFilter === null
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-transparent text-muted-foreground border-border'
-              }`}
-            >
-              All
-            </button>
-            {categoriesWithItems.map(cat => (
+            {COMPLETION_FILTERS.map(({ val, label }) => (
               <button
-                key={cat.id}
-                onClick={() => setCategoryFilter(cat.id)}
+                key={val}
+                onClick={() => setCompletionFilter(val)}
                 className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
-                  categoryFilter === cat.id
+                  completionFilter === val
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-transparent text-muted-foreground border-border'
                 }`}
               >
-                {cat.name}
+                {label}
               </button>
             ))}
+
+            {categoriesWithItems.length > 0 && (
+              <>
+                <div className="w-0.5 bg-foreground/20 shrink-0 my-0.5 rounded-full" />
+                <button
+                  onClick={() => setCategoryFilter(null)}
+                  className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
+                    categoryFilter === null
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-transparent text-muted-foreground border-border'
+                  }`}
+                >
+                  All
+                </button>
+                {categoriesWithItems.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setCategoryFilter(cat.id)}
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors ${
+                      categoryFilter === cat.id
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-transparent text-muted-foreground border-border'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
 
