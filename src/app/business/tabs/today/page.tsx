@@ -26,6 +26,7 @@ type ScheduleEntry = {
   quantity: number;
   item: { name: string; slug: string };
   isOverridden?: boolean;
+  specialOrderQty?: number;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -72,12 +73,14 @@ function BakeCard({
   entry,
   stock,
   bakedQty,
+  specialOrderQty,
   onClick,
   onUndo,
 }: {
   entry: ScheduleEntry;
   stock: number;
   bakedQty: number | null;
+  specialOrderQty?: number;
   onClick: () => void;
   onUndo: () => void;
 }) {
@@ -136,6 +139,13 @@ function BakeCard({
             style={{ width: `${barPct}%`, background: accentColor }}
           />
         </div>
+
+        {/* Special order breakdown */}
+        {!isBaked && specialOrderQty && specialOrderQty > 0 && (
+          <div className="text-[11px] text-muted-foreground mt-1">
+            {quota - specialOrderQty} FOH + {specialOrderQty} special orders
+          </div>
+        )}
 
         {/* Bottom row */}
         <div className="flex justify-between items-center mt-2.5">
@@ -349,12 +359,16 @@ export default function TodayPage() {
         const todayEntries = schedData.filter(e => e.weekday === today);
 
         // Apply any overrides on top of the weekly template
-        const overrideQtyMap: Record<number, number> = {};
-        for (const o of overridesData) overrideQtyMap[o.itemId] = o.quantity;
+        const overrideQtyMap: Record<number, { quantity: number; specialOrderQty: number }> = {};
+        for (const o of overridesData) {
+          overrideQtyMap[o.itemId] = { quantity: o.quantity, specialOrderQty: o.specialOrderQty ?? 0 };
+        }
         for (const entry of todayEntries) {
-          if (overrideQtyMap[entry.itemId] !== undefined) {
-            entry.quantity = overrideQtyMap[entry.itemId];
+          const ov = overrideQtyMap[entry.itemId];
+          if (ov !== undefined) {
+            entry.quantity = ov.quantity + ov.specialOrderQty;
             entry.isOverridden = true;
+            entry.specialOrderQty = ov.specialOrderQty;
           }
         }
 
@@ -601,6 +615,7 @@ export default function TodayPage() {
                       entry={entry}
                       stock={stock}
                       bakedQty={bakedToday[entry.itemId]?.qty ?? null}
+                      specialOrderQty={entry.specialOrderQty ?? 0}
                       onClick={() => setSelectedBake({ entry, stock })}
                       onUndo={() => handleUndoBake(entry.itemId)}
                     />

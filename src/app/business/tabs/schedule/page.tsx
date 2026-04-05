@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ModalShell } from '@/components/modal-shell';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
@@ -8,7 +8,9 @@ const API_URL = import.meta.env.VITE_API_URL as string;
 type Item = { id: number; name: string; slug: string; par: number | null };
 type ScheduleEntry = { itemId: number; weekday: string; quantity: number };
 type ScheduleMap = Record<string, Record<number, number>>;  // scheduleMap[weekday][itemId] = qty
-type OverrideMap = Record<number, number>;                   // overrideMap[itemId] = qty
+type OverrideEntry = { quantity: number; specialOrderQty: number };
+type OverrideMap = Record<number, OverrideEntry>;           // itemId → { foh, special }
+type AllOverrides = Record<string, OverrideMap>;            // dateStr → OverrideMap
 
 // ─── Weekday helpers ──────────────────────────────────────────────────────────
 
@@ -16,7 +18,6 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 type Weekday = typeof WEEKDAYS[number];
 
-// Rotate WEEKDAYS so the bakery's first operating day comes first
 function getOrderedWeekdays(startDay: Weekday): Weekday[] {
   const startIdx = WEEKDAYS.indexOf(startDay);
   return [...WEEKDAYS.slice(startIdx), ...WEEKDAYS.slice(0, startIdx)] as Weekday[];
@@ -42,6 +43,23 @@ function getUpcomingDates(): { label: string; dateStr: string; weekdayIdx: numbe
       isToday: i === 0,
     };
   });
+}
+
+function formatSectionDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function getTomorrowStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return toDateStr(d);
+}
+
+function getTwoMonthsOutStr(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 2);
+  return toDateStr(d);
 }
 
 // ─── Weekly quota sheet ───────────────────────────────────────────────────────
@@ -134,14 +152,14 @@ function QuotaSheet({
   );
 }
 
-// ─── Override sheet ───────────────────────────────────────────────────────────
+// ─── Daily schedule sheet (FOH override + special orders) ─────────────────────
 
-function OverrideSheet({
+function DailySheet({
   item,
   dateStr,
   dateLabel,
   templateQty,
-  existingOverride,
+  existingEntry,
   locked,
   onClose,
   onSaved,
@@ -151,16 +169,19 @@ function OverrideSheet({
   dateStr: string;
   dateLabel: string;
   templateQty: number | null;
-  existingOverride: number | null;
+  existingEntry: OverrideEntry | null;
   locked: boolean;
   onClose: () => void;
-  onSaved: (itemId: number, quantity: number) => void;
+  onSaved: (itemId: number, quantity: number, specialOrderQty: number) => void;
   onRemoved: (itemId: number) => void;
 }) {
-  const [count, setCount] = useState(existingOverride ?? templateQty ?? 1);
+  const [fohCount, setFohCount] = useState(existingEntry?.quantity ?? templateQty ?? 1);
+  const [specialCount, setSpecialCount] = useState(existingEntry?.specialOrderQty ?? 0);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const total = fohCount + specialCount;
 
   const handleSave = async () => {
     setSaving(true);
@@ -170,10 +191,10 @@ function OverrideSheet({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ itemId: item.id, date: dateStr, quantity: count }),
+        body: JSON.stringify({ itemId: item.id, date: dateStr, quantity: fohCount, specialOrderQty: specialCount }),
       });
-      if (!res.ok) throw new Error('Failed to save override');
-      onSaved(item.id, count);
+      if (!res.ok) throw new Error('Failed to save');
+      onSaved(item.id, fohCount, specialCount);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -189,7 +210,7 @@ function OverrideSheet({
         method: 'DELETE',
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Failed to remove override');
+      if (!res.ok) throw new Error('Failed to reset');
       onRemoved(item.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -200,40 +221,65 @@ function OverrideSheet({
   return (
     <ModalShell onClose={onClose}>
         <p className="text-xs font-medium tracking-[0.06em] uppercase text-muted-foreground mb-1">
-          Override · {dateLabel}
+          Daily Schedule · {dateLabel}
         </p>
         <h2 className="text-xl font-semibold text-foreground mb-1">{item.name}</h2>
         {locked && (
           <p className="text-[13px] text-muted-foreground mb-4">Today's schedule is locked</p>
         )}
         {templateQty !== null && (
-          <p className="text-[13px] text-muted-foreground mb-6">
+          <p className="text-[13px] text-muted-foreground mb-5">
             Weekly template: {templateQty}
           </p>
         )}
-        {!templateQty && !locked && <div className="mb-6" />}
+        {!templateQty && !locked && <div className="mb-5" />}
         {error && <p className="text-sm mb-4 px-3 py-2 rounded-lg bg-destructive/10 text-destructive">{error}</p>}
-        <div className="flex items-center justify-center gap-6 mb-7">
-          <button onClick={() => setCount(c => Math.max(0, c - 1))} aria-label="Decrease" disabled={locked}
-            className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">−</button>
+
+        {/* FOH stepper */}
+        <p className="text-[13px] font-semibold text-foreground mb-2 text-center">FOH</p>
+        <div className="flex items-center justify-center gap-6 mb-5">
+          <button onClick={() => setFohCount(c => Math.max(0, c - 1))} aria-label="Decrease FOH" disabled={locked}
+            className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">−</button>
           <div className="text-center w-20">
-            <div className="text-5xl font-bold text-foreground leading-none">{count}</div>
-            <div className="text-[13px] text-muted-foreground mt-1">to bake</div>
+            <div className="text-5xl font-bold text-foreground leading-none">{fohCount}</div>
+            <div className="text-[13px] text-muted-foreground mt-1">FOH qty</div>
           </div>
-          <button onClick={() => setCount(c => c + 1)} aria-label="Increase" disabled={locked}
-            className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">+</button>
+          <button onClick={() => setFohCount(c => c + 1)} aria-label="Increase FOH" disabled={locked}
+            className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">+</button>
         </div>
+
+        {/* Special orders stepper */}
+        <p className="text-[13px] font-semibold text-foreground mb-2 text-center">Special Orders</p>
+        <div className="flex items-center justify-center gap-6 mb-5">
+          <button onClick={() => setSpecialCount(c => Math.max(0, c - 1))} aria-label="Decrease special orders" disabled={locked}
+            className="w-14 h-14 rounded-full border border-border bg-background text-2xl text-foreground flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">−</button>
+          <div className="text-center w-20">
+            <div className="text-5xl font-bold text-foreground leading-none">{specialCount}</div>
+            <div className="text-[13px] text-muted-foreground mt-1">additive</div>
+          </div>
+          <button onClick={() => setSpecialCount(c => c + 1)} aria-label="Increase special orders" disabled={locked}
+            className="w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">+</button>
+        </div>
+
+        {/* Breakdown line */}
+        {specialCount > 0 && (
+          <p className="text-center text-[13px] text-muted-foreground mb-5">
+            {fohCount} FOH + {specialCount} special ={' '}
+            <span className="font-semibold text-foreground">{total} total</span>
+          </p>
+        )}
+
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 h-14 rounded-full border border-border bg-transparent text-foreground text-[15px] font-medium cursor-pointer">Cancel</button>
           <button onClick={handleSave} disabled={saving || locked} className="flex-[2] h-14 rounded-full bg-primary text-primary-foreground text-[15px] font-semibold cursor-pointer disabled:opacity-60">
-            {saving ? 'Saving…' : 'Set Override'}
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
-        {existingOverride !== null && !locked && (
+        {existingEntry !== null && !locked && (
           <div className="mt-5 pt-5 border-t border-border text-center">
             <button onClick={handleRemove} disabled={removing}
               className="text-sm text-muted-foreground hover:text-destructive transition-colors cursor-pointer disabled:opacity-60">
-              {removing ? 'Removing…' : 'Remove override — use weekly template'}
+              {removing ? 'Resetting…' : 'Reset to weekly template'}
             </button>
           </div>
         )}
@@ -243,7 +289,7 @@ function OverrideSheet({
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-type Mode = 'weekly' | 'override';
+type Mode = 'summary' | 'weekly';
 
 export default function SchedulePage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -253,22 +299,71 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Summary mode state
+  const [mode, setMode] = useState<Mode>('summary');
+  const [allOverrides, setAllOverrides] = useState<AllOverrides>({});
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [focusedDate, setFocusedDate] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const datePickerRef = useRef<HTMLInputElement>(null);
+
+  // Override sheet state
+  const [dailySheet, setDailySheet] = useState<{
+    item: Item;
+    dateStr: string;
+    dateLabel: string;
+    isToday: boolean;
+    existingEntry: OverrideEntry | null;
+  } | null>(null);
+
   // Weekly mode state
   const [selectedDayIdx, setSelectedDayIdx] = useState(getTodayIdx);
   const [weeklySheet, setWeeklySheet] = useState<{ item: Item; existing: number | null } | null>(null);
 
-  // Override mode state
-  const [mode, setMode] = useState<Mode>('weekly');
+  const [toast, setToast] = useState<string | null>(null);
+
   const upcomingDates = getUpcomingDates();
   const filteredUpcomingDates = operatingDays.length === 0
     ? upcomingDates
     : upcomingDates.filter(d => operatingDays.includes(WEEKDAYS[d.weekdayIdx]));
-  const [selectedDateIdx, setSelectedDateIdx] = useState(0);
-  const [overrideMap, setOverrideMap] = useState<OverrideMap>({});
-  const [overridesLoading, setOverridesLoading] = useState(false);
-  const [overrideSheet, setOverrideSheet] = useState<{ item: Item; existingOverride: number | null } | null>(null);
 
-  const [toast, setToast] = useState<string | null>(null);
+  // ── Data fetching ──────────────────────────────────────────────────────────
+
+  const fetchOverridesForDate = useCallback(async (dateStr: string) => {
+    try {
+      const res = await fetch(`${API_URL}/production-schedule/overrides?date=${dateStr}`, { credentials: 'include' });
+      if (!res.ok) return;
+      const data: { itemId: number; quantity: number; specialOrderQty: number }[] = await res.json();
+      const map: OverrideMap = {};
+      for (const o of data) map[o.itemId] = { quantity: o.quantity, specialOrderQty: o.specialOrderQty ?? 0 };
+      setAllOverrides(prev => ({ ...prev, [dateStr]: map }));
+    } catch {
+      // silently ignore — overrides just won't show
+    }
+  }, []);
+
+  const fetchAllUpcomingOverrides = useCallback(async (dates: string[]) => {
+    setSummaryLoading(true);
+    try {
+      const results = await Promise.all(
+        dates.map(d =>
+          fetch(`${API_URL}/production-schedule/overrides?date=${d}`, { credentials: 'include' })
+            .then(r => r.ok ? r.json() : [])
+        )
+      );
+      const map: AllOverrides = {};
+      dates.forEach((d, i) => {
+        const entry: OverrideMap = {};
+        for (const o of results[i]) {
+          entry[o.itemId] = { quantity: o.quantity, specialOrderQty: o.specialOrderQty ?? 0 };
+        }
+        map[d] = entry;
+      });
+      setAllOverrides(map);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -296,6 +391,7 @@ export default function SchedulePage() {
         }
         setScheduleMap(map);
 
+        let upcomingOpDates = upcomingDates;
         if (settingsData.operatingDays.length > 0) {
           setOperatingDays(settingsData.operatingDays);
           setWeekStart(settingsData.operatingDays[0]);
@@ -304,12 +400,11 @@ export default function SchedulePage() {
             const firstOpIdx = WEEKDAYS.indexOf(settingsData.operatingDays[0]);
             if (firstOpIdx >= 0) setSelectedDayIdx(firstOpIdx);
           }
-          // Snap override date selection to the first upcoming operating day
-          const firstValidOverrideIdx = getUpcomingDates().findIndex(
-            d => settingsData.operatingDays.includes(WEEKDAYS[d.weekdayIdx])
-          );
-          if (firstValidOverrideIdx >= 0) setSelectedDateIdx(firstValidOverrideIdx);
+          upcomingOpDates = upcomingDates.filter(d => settingsData.operatingDays.includes(WEEKDAYS[d.weekdayIdx]));
         }
+
+        // Batch-fetch overrides for all upcoming operating days
+        fetchAllUpcomingOverrides(upcomingOpDates.map(d => d.dateStr));
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : 'Something went wrong');
       } finally {
@@ -317,38 +412,20 @@ export default function SchedulePage() {
       }
     };
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchOverrides = useCallback(async (dateStr: string) => {
-    setOverridesLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/production-schedule/overrides?date=${dateStr}`, { credentials: 'include' });
-      if (!res.ok) return;
-      const data: { itemId: number; quantity: number }[] = await res.json();
-      const map: OverrideMap = {};
-      for (const o of data) map[o.itemId] = o.quantity;
-      setOverrideMap(map);
-    } finally {
-      setOverridesLoading(false);
-    }
-  }, []);
-
-  // Fetch overrides whenever mode is override and selected date changes
-  useEffect(() => {
-    if (mode === 'override') {
-      fetchOverrides(upcomingDates[selectedDateIdx].dateStr);
-    }
-  }, [mode, selectedDateIdx, fetchOverrides]);
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2800);
   };
 
-  // Weekly handlers
   const handleWeeklySaved = (itemId: number, weekday: Weekday, quantity: number) => {
     setScheduleMap(prev => ({ ...prev, [weekday]: { ...(prev[weekday] ?? {}), [itemId]: quantity } }));
     setWeeklySheet(null);
+    setMode('summary');
     showToast('Schedule updated');
   };
 
@@ -359,33 +436,42 @@ export default function SchedulePage() {
       return { ...prev, [weekday]: day };
     });
     setWeeklySheet(null);
+    setMode('summary');
     showToast('Removed from schedule');
   };
 
-  // Override handlers
-  const handleOverrideSaved = (itemId: number, quantity: number) => {
-    setOverrideMap(prev => ({ ...prev, [itemId]: quantity }));
-    setOverrideSheet(null);
-    showToast('Override saved');
+  const handleDailySaved = (dateStr: string, itemId: number, quantity: number, specialOrderQty: number) => {
+    setAllOverrides(prev => ({
+      ...prev,
+      [dateStr]: { ...(prev[dateStr] ?? {}), [itemId]: { quantity, specialOrderQty } },
+    }));
+    setDailySheet(null);
+    showToast('Saved');
   };
 
-  const handleOverrideRemoved = (itemId: number) => {
-    setOverrideMap(prev => { const next = { ...prev }; delete next[itemId]; return next; });
-    setOverrideSheet(null);
-    showToast('Override removed');
+  const handleDailyRemoved = (dateStr: string, itemId: number) => {
+    setAllOverrides(prev => {
+      const day = { ...(prev[dateStr] ?? {}) };
+      delete day[itemId];
+      return { ...prev, [dateStr]: day };
+    });
+    setDailySheet(null);
+    showToast('Reset to weekly template');
   };
+
+  // ── Derived values ─────────────────────────────────────────────────────────
 
   const selectedWeekday = WEEKDAYS[selectedDayIdx];
   const todayIdx = getTodayIdx();
-  const selectedDate = upcomingDates[selectedDateIdx];
-  const overrideWeekday = WEEKDAYS[selectedDate.weekdayIdx];
-
-  // What to show in the item list
   const weeklyDayQuotas = scheduleMap[selectedWeekday] ?? {};
-  const overrideDayTemplate = scheduleMap[overrideWeekday] ?? {};
-  const scheduledCount = mode === 'weekly'
-    ? Object.keys(weeklyDayQuotas).length
-    : Object.keys(overrideDayTemplate).length;
+
+  // Dates to show in summary: upcoming operating days + focusedDate if set
+  const summaryDates = [
+    ...filteredUpcomingDates,
+    ...(focusedDate && !filteredUpcomingDates.find(d => d.dateStr === focusedDate)
+      ? [{ label: focusedDate, dateStr: focusedDate, weekdayIdx: new Date(focusedDate + 'T00:00:00').getDay(), isToday: false }]
+      : []),
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -395,40 +481,30 @@ export default function SchedulePage() {
             <h1 className="text-[22px] font-bold text-foreground">Schedule</h1>
             {!loading && !fetchError && (
               <p className="text-[13px] text-muted-foreground mt-0.5">
-                {mode === 'weekly'
-                  ? scheduledCount > 0
-                    ? `${scheduledCount} item${scheduledCount !== 1 ? 's' : ''} on ${selectedWeekday}`
-                    : `Nothing scheduled for ${selectedWeekday}`
-                  : overridesLoading
-                    ? 'Loading overrides…'
-                    : `${Object.keys(overrideMap).length} override${Object.keys(overrideMap).length !== 1 ? 's' : ''} for ${selectedDate.label}`
+                {mode === 'summary'
+                  ? summaryLoading
+                    ? 'Loading…'
+                    : `Next ${filteredUpcomingDates.length} operating days`
+                  : `${Object.keys(weeklyDayQuotas).length} item${Object.keys(weeklyDayQuotas).length !== 1 ? 's' : ''} on ${selectedWeekday}`
                 }
               </p>
             )}
           </div>
 
           {/* Mode toggle */}
-          <div className="flex rounded-full border border-border overflow-hidden shrink-0">
-            <button
-              onClick={() => setMode('weekly')}
-              className={`px-3 py-1.5 text-[12px] font-medium cursor-pointer transition-colors ${
-                mode === 'weekly' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
-              }`}
-            >
-              Weekly
-            </button>
-            <button
-              onClick={() => setMode('override')}
-              className={`px-3 py-1.5 text-[12px] font-medium cursor-pointer transition-colors ${
-                mode === 'override' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
-              }`}
-            >
-              Override
-            </button>
-          </div>
+          <button
+            onClick={() => setMode(m => m === 'weekly' ? 'summary' : 'weekly')}
+            className={`px-3 py-1.5 text-[12px] font-medium rounded-full border cursor-pointer transition-colors shrink-0 ${
+              mode === 'weekly'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border text-muted-foreground'
+            }`}
+          >
+            {mode === 'weekly' ? '← Summary' : 'Weekly template'}
+          </button>
         </div>
 
-        {/* Day / date pills */}
+        {/* Pill row */}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
           {mode === 'weekly'
             ? getOrderedWeekdays(weekStart).map((day) => {
@@ -447,85 +523,176 @@ export default function SchedulePage() {
                   </button>
                 );
               })
-            : filteredUpcomingDates.map((d) => {
-                const origIdx = upcomingDates.indexOf(d);
-                const isSelected = origIdx === selectedDateIdx;
-                const hasOverride = Object.keys(overrideMap).length > 0 && isSelected;
-                return (
-                  <button key={d.dateStr} onClick={() => setSelectedDateIdx(origIdx)}
-                    className={`flex flex-col items-center px-3 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors shrink-0 ${
-                      isSelected ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border'
-                    } ${d.isToday ? 'opacity-60' : ''}`}
+            : (
+              <>
+                {filteredUpcomingDates.map((d) => {
+                  const dateOverrides = allOverrides[d.dateStr] ?? {};
+                  const hasChanges = Object.keys(dateOverrides).length > 0;
+                  return (
+                    <button
+                      key={d.dateStr}
+                      onClick={() => {
+                        document.getElementById(`day-${d.dateStr}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-colors shrink-0 ${
+                        d.isToday ? 'bg-transparent text-muted-foreground border-border opacity-60' : 'bg-transparent text-muted-foreground border-border'
+                      }`}
+                    >
+                      <span>{d.isToday ? `🔒 ${d.label}` : d.label}</span>
+                      {hasChanges && <span className="w-1 h-1 rounded-full mt-0.5 bg-primary" />}
+                    </button>
+                  );
+                })}
+
+                {/* Calendar picker button */}
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => {
+                      setShowDatePicker(p => !p);
+                      setTimeout(() => datePickerRef.current?.showPicker?.(), 50);
+                    }}
+                    className="px-3 py-1.5 rounded-full border border-border text-[13px] text-muted-foreground cursor-pointer transition-colors"
+                    aria-label="Pick a date"
                   >
-                    <span>{d.isToday ? `🔒 ${d.label}` : d.label}</span>
-                    {hasOverride && <span className={`w-1 h-1 rounded-full mt-0.5 ${isSelected ? 'bg-primary-foreground' : 'bg-primary'}`} />}
+                    📅
                   </button>
-                );
-              })
+                  <input
+                    ref={datePickerRef}
+                    type="date"
+                    min={getTomorrowStr()}
+                    max={getTwoMonthsOutStr()}
+                    className="absolute opacity-0 pointer-events-none w-0 h-0"
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      setFocusedDate(val);
+                      fetchOverridesForDate(val);
+                      setShowDatePicker(false);
+                      setTimeout(() => document.getElementById(`day-${val}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+                    }}
+                  />
+                </div>
+
+                {/* Focused date pill (if set) */}
+                {focusedDate && !filteredUpcomingDates.find(d => d.dateStr === focusedDate) && (
+                  <button
+                    onClick={() => setFocusedDate(null)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-primary bg-primary/10 text-[13px] font-medium text-primary cursor-pointer shrink-0"
+                  >
+                    {new Date(focusedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    <span className="text-[11px]">×</span>
+                  </button>
+                )}
+              </>
+            )
           }
         </div>
       </header>
 
-      {/* Item list */}
-      <main className="px-4 pt-3 pb-24 flex flex-col gap-2">
+      {/* Main content */}
+      <main className="px-4 pt-3 pb-24 flex flex-col gap-5">
         {loading && <p className="text-center text-muted-foreground pt-12" role="status">Loading…</p>}
         {fetchError && <p className="text-center text-destructive pt-12">{fetchError}</p>}
         {!loading && !fetchError && items.length === 0 && (
           <p className="text-center text-muted-foreground pt-12">No items yet — add some from the Inventory tab.</p>
         )}
 
-        {mode === 'weekly'
-          ? items.map(item => {
-              const quota = weeklyDayQuotas[item.id] ?? null;
-              return (
-                <button key={item.id} onClick={() => setWeeklySheet({ item, existing: quota })}
-                  className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
-                >
-                  <span className={`text-[17px] font-medium ${quota !== null ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    {item.name}
-                  </span>
-                  <div className="shrink-0 ml-4 text-right">
-                    {quota !== null
-                      ? <span className="text-[22px] font-bold text-foreground leading-none">{quota}</span>
-                      : <span className="text-sm text-muted-foreground">—</span>
-                    }
+        {!loading && !fetchError && mode === 'weekly' && (
+          items.map(item => {
+            const quota = weeklyDayQuotas[item.id] ?? null;
+            return (
+              <button key={item.id} onClick={() => setWeeklySheet({ item, existing: quota })}
+                className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
+              >
+                <span className={`text-[17px] font-medium ${quota !== null ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {item.name}
+                </span>
+                <div className="shrink-0 ml-4 text-right">
+                  {quota !== null
+                    ? <span className="text-[22px] font-bold text-foreground leading-none">{quota}</span>
+                    : <span className="text-sm text-muted-foreground">—</span>
+                  }
+                </div>
+              </button>
+            );
+          })
+        )}
+
+        {!loading && !fetchError && mode === 'summary' && (
+          summaryDates.map(d => {
+            const weekday = WEEKDAYS[d.weekdayIdx];
+            const dayTemplate = scheduleMap[weekday] ?? {};
+            const dayOverrides = allOverrides[d.dateStr] ?? {};
+            const scheduledItems = items.filter(item => dayTemplate[item.id] !== undefined);
+
+            return (
+              <section key={d.dateStr} id={`day-${d.dateStr}`}>
+                <div className="flex justify-between items-baseline mb-2">
+                  <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {formatSectionDate(d.dateStr)}
+                  </h2>
+                  {d.isToday && (
+                    <span className="text-[11px] text-muted-foreground">🔒 locked</span>
+                  )}
+                </div>
+
+                {scheduledItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2 text-center">Nothing scheduled</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {scheduledItems.map(item => {
+                      const templateQty = dayTemplate[item.id];
+                      const override = dayOverrides[item.id] ?? null;
+                      const fohQty = override?.quantity ?? templateQty;
+                      const specialQty = override?.specialOrderQty ?? 0;
+                      const total = fohQty + specialQty;
+                      const hasFohOverride = override !== null && override.quantity !== templateQty;
+
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => setDailySheet({
+                            item,
+                            dateStr: d.dateStr,
+                            dateLabel: d.label,
+                            isToday: d.isToday,
+                            existingEntry: override,
+                          })}
+                          className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
+                        >
+                          <div>
+                            <div className="text-[17px] font-medium text-foreground">{item.name}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {hasFohOverride && (
+                                <span className="text-[12px] text-muted-foreground">template: {templateQty}</span>
+                              )}
+                              {specialQty > 0 && (
+                                <span
+                                  className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
+                                  style={{ background: 'var(--status-below-par-bg)', color: 'var(--status-below-par-text)' }}
+                                >
+                                  +{specialQty} special
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="shrink-0 ml-4 text-right">
+                            <div className="text-[22px] font-bold text-foreground leading-none">{total}</div>
+                            {hasFohOverride && (
+                              <div className="text-[11px] font-medium mt-0.5" style={{ color: 'var(--status-below-par-text)' }}>
+                                FOH override
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                </button>
-              );
-            })
-          : items.map(item => {
-              const templateQty = overrideDayTemplate[item.id] ?? null;
-              const overrideQty = overrideMap[item.id] ?? null;
-              const hasOverride = overrideQty !== null;
-              return (
-                <button key={item.id}
-                  onClick={() => setOverrideSheet({ item, existingOverride: overrideQty })}
-                  className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
-                >
-                  <div>
-                    <div className="text-[17px] font-medium text-foreground">{item.name}</div>
-                    {templateQty !== null && (
-                      <div className="text-[12px] text-muted-foreground mt-0.5">
-                        template: {templateQty}
-                      </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 ml-4 text-right">
-                    {hasOverride ? (
-                      <>
-                        <div className="text-[22px] font-bold text-foreground leading-none">{overrideQty}</div>
-                        <div className="text-[11px] font-medium mt-0.5" style={{ color: 'var(--status-below-par-text)' }}>override</div>
-                      </>
-                    ) : templateQty !== null ? (
-                      <span className="text-[22px] font-bold text-muted-foreground leading-none">{templateQty}</span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </div>
-                </button>
-              );
-            })
-        }
+                )}
+              </section>
+            );
+          })
+        )}
       </main>
 
       {/* Weekly sheet */}
@@ -540,18 +707,18 @@ export default function SchedulePage() {
         />
       )}
 
-      {/* Override sheet */}
-      {mode === 'override' && overrideSheet && (
-        <OverrideSheet
-          item={overrideSheet.item}
-          dateStr={selectedDate.dateStr}
-          dateLabel={selectedDate.label}
-          templateQty={overrideDayTemplate[overrideSheet.item.id] ?? null}
-          existingOverride={overrideSheet.existingOverride}
-          locked={selectedDate.isToday}
-          onClose={() => setOverrideSheet(null)}
-          onSaved={handleOverrideSaved}
-          onRemoved={handleOverrideRemoved}
+      {/* Daily sheet */}
+      {dailySheet && (
+        <DailySheet
+          item={dailySheet.item}
+          dateStr={dailySheet.dateStr}
+          dateLabel={dailySheet.dateLabel}
+          templateQty={scheduleMap[WEEKDAYS[new Date(dailySheet.dateStr + 'T00:00:00').getDay()]]?.[dailySheet.item.id] ?? null}
+          existingEntry={dailySheet.existingEntry}
+          locked={dailySheet.isToday}
+          onClose={() => setDailySheet(null)}
+          onSaved={(itemId, quantity, specialOrderQty) => handleDailySaved(dailySheet.dateStr, itemId, quantity, specialOrderQty)}
+          onRemoved={(itemId) => handleDailyRemoved(dailySheet.dateStr, itemId)}
         />
       )}
 
