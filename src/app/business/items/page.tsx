@@ -1,6 +1,6 @@
 import { useState, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar } from 'lucide-react';
 import { ModalShell } from '@/components/modal-shell';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
@@ -79,6 +79,31 @@ function NumericField({
   );
 }
 
+// ─── Info tooltip ─────────────────────────────────────────────────────────────
+
+function InfoTooltip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative flex items-center">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        onBlur={() => setOpen(false)}
+        aria-label="More information"
+        className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-semibold text-muted-foreground border border-muted-foreground/40 leading-none cursor-pointer hover:text-foreground hover:border-foreground/40 transition-colors"
+      >
+        i
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-48 rounded-lg bg-foreground text-background text-xs px-3 py-2 shadow-lg z-50 pointer-events-none">
+          {text}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Item sheet (add + edit) ──────────────────────────────────────────────────
 
 type SheetState =
@@ -103,6 +128,7 @@ function ItemSheet({
   const nameId = useId();
   const parId = useId();
   const defaultBatchQtyId = useId();
+  const initialQtyId = useId();
   const categoryId = useId();
   const newCategoryId = useId();
 
@@ -114,6 +140,7 @@ function ItemSheet({
     initial?.category?.id != null ? String(initial.category.id) : ''
   );
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [initialQtyInput, setInitialQtyInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -163,6 +190,8 @@ function ItemSheet({
   const parValid = parInput.trim() === '' || (!isNaN(parsedPar!) && parsedPar! >= 0);
   const parsedDefaultBatchQty = defaultBatchQtyInput.trim() === '' ? null : parseInt(defaultBatchQtyInput, 10);
   const defaultBatchQtyValid = defaultBatchQtyInput.trim() === '' || (!isNaN(parsedDefaultBatchQty!) && parsedDefaultBatchQty! >= 1);
+  const parsedInitialQty = initialQtyInput.trim() === '' ? null : parseInt(initialQtyInput, 10);
+  const initialQtyValid = initialQtyInput.trim() === '' || (!isNaN(parsedInitialQty!) && parsedInitialQty! >= 0);
 
   const isAddingNew = selectedCategoryId === '__new__';
 
@@ -170,6 +199,7 @@ function ItemSheet({
     if (!name.trim()) { setError('Name is required'); return; }
     if (!parValid) { setError('Par must be a whole number (0 or more)'); return; }
     if (!defaultBatchQtyValid) { setError('Default batch qty must be a whole number (1 or more)'); return; }
+    if (state.mode === 'add' && !initialQtyValid) { setError('Initial qty must be a whole number (0 or more)'); return; }
     if (isAddingNew && !newCategoryName.trim()) { setError('Enter a name for the new category'); return; }
 
     for (const day of operatingDays) {
@@ -211,6 +241,7 @@ function ItemSheet({
         par: parsedPar,
         defaultBatchQty: parsedDefaultBatchQty,
         categoryId: resolvedCategoryId,
+        ...(state.mode === 'add' && parsedInitialQty != null && parsedInitialQty > 0 && { initialQty: parsedInitialQty }),
       };
 
       let res: Response;
@@ -365,7 +396,7 @@ function ItemSheet({
           </div>
         )}
 
-        {/* Par + Default batch qty */}
+        {/* Par + Default batch qty + Starting stock (add mode) */}
         <div className="flex gap-6 mb-7">
           <div className="flex flex-col gap-1.5">
             <label htmlFor={parId} className="text-sm font-medium text-foreground">
@@ -379,6 +410,17 @@ function ItemSheet({
             </label>
             <NumericField id={defaultBatchQtyId} value={defaultBatchQtyInput} onChange={setDefaultBatchQtyInput} min={1} />
           </div>
+          {state.mode === 'add' && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1">
+                <label htmlFor={initialQtyId} className="text-sm font-medium text-foreground">
+                  Starting stock <span className="text-muted-foreground font-normal">(optional)</span>
+                </label>
+                <InfoTooltip text="Units already on hand — sets initial inventory when the item is created." />
+              </div>
+              <NumericField id={initialQtyId} value={initialQtyInput} onChange={setInitialQtyInput} min={0} />
+            </div>
+          )}
         </div>
 
         {/* Save / Cancel */}
@@ -443,6 +485,7 @@ export default function ItemsPage() {
 
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [scheduledItemIds, setScheduledItemIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetState | null>(null);
@@ -452,14 +495,25 @@ export default function ItemsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [itemsRes, catsRes] = await Promise.all([
+        const [itemsRes, catsRes, schedRes] = await Promise.all([
           fetch(`${API_URL}/items`, { credentials: 'include' }),
           fetch(`${API_URL}/categories`, { credentials: 'include' }),
+          fetch(`${API_URL}/production-schedule`, { credentials: 'include' }),
         ]);
         if (!itemsRes.ok) throw new Error('Failed to load items');
-        const [itemsData, catsData] = await Promise.all([itemsRes.json(), catsRes.ok ? catsRes.json() : []]);
+        const [itemsData, catsData, schedData] = await Promise.all([
+          itemsRes.json(),
+          catsRes.ok ? catsRes.json() : [],
+          schedRes.ok ? schedRes.json() : [],
+        ]);
         setItems(itemsData);
         setCategories(catsData);
+        const ids = new Set<number>(
+          (schedData as { itemId: number; quantity: number }[])
+            .filter(e => e.quantity > 0)
+            .map(e => e.itemId)
+        );
+        setScheduledItemIds(ids);
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : 'Something went wrong');
       } finally {
@@ -475,13 +529,20 @@ export default function ItemsPage() {
   };
 
   const handleSaved = (saved: Item) => {
+    const isNew = !items.some(i => i.id === saved.id);
     setItems(prev => {
       const idx = prev.findIndex(i => i.id === saved.id);
       return idx >= 0
         ? prev.map(i => i.id === saved.id ? saved : i)
         : [...prev, saved];
     });
-    const isNew = !items.some(i => i.id === saved.id);
+    // Re-fetch schedule so the calendar icon reflects any changes made in the sheet
+    fetch(`${API_URL}/production-schedule`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((schedData: { itemId: number; quantity: number }[]) => {
+        setScheduledItemIds(new Set(schedData.filter(e => e.quantity > 0).map(e => e.itemId)));
+      })
+      .catch(() => {});
     showToast(isNew ? `${saved.name} added` : `${saved.name} updated`);
     setSheet(null);
   };
@@ -609,11 +670,17 @@ export default function ItemsPage() {
                   className="w-full bg-card border border-border rounded-[12px] px-4 py-3.5 flex justify-between items-center text-left cursor-pointer hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(28,25,23,0.08)] transition-[transform,box-shadow] duration-150"
                 >
                   <span className="text-[17px] font-medium text-foreground">{item.name}</span>
-                  <div className="text-right shrink-0 ml-4">
-                    <div className="text-sm text-muted-foreground">{item.par != null ? `par ${item.par}` : 'no par'}</div>
-                    {item.defaultBatchQty != null && (
-                      <div className="text-xs text-muted-foreground/70">batch {item.defaultBatchQty}</div>
-                    )}
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <Calendar
+                      size={15}
+                      className={scheduledItemIds.has(item.id) ? 'text-primary' : 'text-muted-foreground/30'}
+                    />
+                    <div className="text-right">
+                      <div className="text-sm text-muted-foreground">{item.par != null ? `par ${item.par}` : 'no par'}</div>
+                      {item.defaultBatchQty != null && (
+                        <div className="text-xs text-muted-foreground/70">batch {item.defaultBatchQty}</div>
+                      )}
+                    </div>
                   </div>
                 </button>
               ))}
