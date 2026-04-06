@@ -39,7 +39,7 @@ export default function LoginPage() {
 		<div className="flex min-h-screen items-center justify-center bg-gray-50">
 			<form
 				onSubmit={handleSubmit}
-				className="w-full max-w-sm rounded-lg bg-white p-8 shadow-md"
+				className="w-full max-w-sm rounded-lg bg-white p-8 shadow-md text-gray-900"
 			>
 				<h2 className="mb-6 text-center text-2xl font-bold">Login</h2>
 				{error && (

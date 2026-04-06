@@ -1,15 +1,16 @@
 // Business layout — fixed app header + sidebar (desktop/landscape) or bottom nav (mobile portrait)
 
-import { NavLink, Outlet, useParams, useNavigate } from "react-router";
-import { Sun, Moon, LogOut } from "lucide-react";
+import { NavLink, Outlet, useParams, useNavigate, useLocation } from "react-router";
+import { Sun, Moon, LogOut, MoreHorizontal } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/auth";
 import { useTheme } from "@/hooks/useTheme";
 
 const TABS = [
   { label: "Today",     icon: "☀️",  path: "today"      },
+  { label: "Schedule",  icon: "📅",  path: "schedule"   },
   { label: "Inventory", icon: "📦",  path: "inventory"  },
   { label: "History",   icon: "🥐",  path: "history"    },
-  { label: "Schedule",  icon: "📅",  path: "schedule"   },
 ] as const;
 
 const ADMIN_TABS = [
@@ -21,10 +22,16 @@ export default function BusinessLayout() {
   const { bakerySlug } = useParams();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggle } = useTheme();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const canManage = user?.role === 'ADMIN' || user?.role === 'MANAGER';
-  const tabs = canManage ? [...TABS, ...ADMIN_TABS] : TABS;
+  const sidebarTabs = canManage ? [...TABS, ...ADMIN_TABS] : TABS;
+  const moreIsActive = ADMIN_TABS.some(t => location.pathname.includes(`/${t.path}`));
+
+  // Close "More" menu on navigation
+  useEffect(() => { setMoreOpen(false); }, [location.pathname]);
 
   const handleLogout = async () => {
     await logout?.();
@@ -66,7 +73,7 @@ export default function BusinessLayout() {
 
         {/* Nav links */}
         <nav className="flex-1 py-3 px-2 flex flex-col gap-0.5 overflow-y-auto">
-          {tabs.map(tab => (
+          {sidebarTabs.map(tab => (
             <NavLink
               key={tab.path}
               to={`/${bakerySlug}/${tab.path}`}
@@ -99,7 +106,7 @@ export default function BusinessLayout() {
 
       {/* ── Bottom nav — mobile portrait only ── */}
       <nav className="flex md:hidden landscape:hidden fixed bottom-0 left-0 w-full h-16 bg-card border-t border-border z-40">
-        {tabs.map(tab => (
+        {TABS.map(tab => (
           <NavLink
             key={tab.path}
             to={`/${bakerySlug}/${tab.path}`}
@@ -113,6 +120,47 @@ export default function BusinessLayout() {
             <span className="text-[11px]">{tab.label}</span>
           </NavLink>
         ))}
+
+        {canManage && (
+          <div className="flex-1 relative flex flex-col items-center justify-center">
+            {/* More popover */}
+            {moreOpen && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setMoreOpen(false)}
+                />
+                {/* Menu */}
+                <div className="absolute bottom-full right-0 mb-1 bg-card border border-border rounded-lg shadow-lg w-44 py-1 z-50">
+                  {ADMIN_TABS.map(tab => (
+                    <NavLink
+                      key={tab.path}
+                      to={`/${bakerySlug}/${tab.path}`}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
+                          isActive ? "text-sienna" : "text-muted-foreground hover:text-foreground"
+                        }`
+                      }
+                    >
+                      <span className="text-base">{tab.icon}</span>
+                      <span>{tab.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </>
+            )}
+            <button
+              onClick={() => setMoreOpen(o => !o)}
+              className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors ${
+                moreIsActive || moreOpen ? "text-sienna" : "text-muted-foreground"
+              }`}
+            >
+              <MoreHorizontal size={20} />
+              <span className="text-[11px]">More</span>
+            </button>
+          </div>
+        )}
       </nav>
     </div>
   );
