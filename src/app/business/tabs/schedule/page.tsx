@@ -324,7 +324,6 @@ export default function SchedulePage() {
   const [allOverrides, setAllOverrides] = useState<AllOverrides>({});
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [focusedDate, setFocusedDate] = useState<string | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const datePickerRef = useRef<HTMLInputElement>(null);
 
   // Override sheet state
@@ -568,7 +567,6 @@ export default function SchedulePage() {
                 <div className="relative shrink-0">
                   <button
                     onClick={() => {
-                      setShowDatePicker(p => !p);
                       setTimeout(() => datePickerRef.current?.showPicker?.(), 50);
                     }}
                     className="px-3 py-1.5 rounded-full border border-border text-[13px] text-muted-foreground cursor-pointer transition-colors"
@@ -587,7 +585,6 @@ export default function SchedulePage() {
                       if (!val) return;
                       setFocusedDate(val);
                       fetchOverridesForDate(val);
-                      setShowDatePicker(false);
                       setTimeout(() => document.getElementById(`day-${val}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
                     }}
                   />

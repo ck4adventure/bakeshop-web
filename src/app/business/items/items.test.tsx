@@ -58,7 +58,7 @@ describe('ItemsPage — clearing optional fields', () => {
     await waitFor(() => {
       const patchCall = fetchMock.mock.calls.find(([, opts]) => opts?.method === 'PATCH')
       expect(patchCall).toBeDefined()
-      const body = JSON.parse(patchCall[1].body)
+      const body = JSON.parse(patchCall![1].body)
       expect(body.defaultBatchQty).toBeNull()
     })
   })

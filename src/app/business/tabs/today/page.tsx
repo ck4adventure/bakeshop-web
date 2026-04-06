@@ -346,7 +346,7 @@ export default function TodayPage() {
         if (!invRes.ok) throw new Error('Failed to load inventory');
         if (!schedRes.ok) throw new Error('Failed to load schedule');
 
-        const [invData, schedData, overridesData, todayBakesData]: [InventoryRecord[], ScheduleEntry[], { itemId: number; quantity: number }[], BakeTransaction[]] = await Promise.all([
+        const [invData, schedData, overridesData, todayBakesData]: [InventoryRecord[], ScheduleEntry[], { itemId: number; quantity: number; specialOrderQty?: number }[], BakeTransaction[]] = await Promise.all([
           invRes.json(),
           schedRes.json(),
           overridesRes.ok ? overridesRes.json() : Promise.resolve([]),

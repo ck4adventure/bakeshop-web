@@ -55,13 +55,6 @@ export default function SettingsPage() {
         <main className="px-4 pt-5 pb-28 flex flex-col gap-8">
           <section>
             <p className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Catalog
-            </p>
-            <NavRow label="Manage Items" onClick={() => navigate('../items')} />
-          </section>
-
-          <section>
-            <p className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               Setup
             </p>
             <NavRow label="Operating Days" onClick={() => navigate('../operating-days')} />

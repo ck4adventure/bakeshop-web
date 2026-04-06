@@ -12,7 +12,10 @@ const TABS = [
   { label: "Schedule",  icon: "📅",  path: "schedule"   },
 ] as const;
 
-const ADMIN_TAB = { label: "Settings", icon: "⚙️", path: "settings" } as const;
+const ADMIN_TABS = [
+  { label: "Manage Items", icon: "🗂️", path: "items"    },
+  { label: "Settings",     icon: "⚙️",  path: "settings" },
+] as const;
 
 export default function BusinessLayout() {
   const { bakerySlug } = useParams();
@@ -21,7 +24,7 @@ export default function BusinessLayout() {
   const { theme, toggle } = useTheme();
 
   const canManage = user?.role === 'ADMIN' || user?.role === 'MANAGER';
-  const tabs = canManage ? [...TABS, ADMIN_TAB] : TABS;
+  const tabs = canManage ? [...TABS, ...ADMIN_TABS] : TABS;
 
   const handleLogout = async () => {
     await logout?.();
